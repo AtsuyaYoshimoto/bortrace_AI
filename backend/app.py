@@ -125,31 +125,42 @@ def extract_racer_data(html_content):
     """出走表HTMLから選手情報を抽出"""
     try:
         import re
+        import codecs
         
         soup = BeautifulSoup(html_content, 'html.parser')
         text_content = soup.get_text()
         
-        # ユニコードエスケープ文字をデコード
+        # より強力なユニコードデコード
         try:
-            # ¥u形式のユニコードをデコード
-            decoded_text = text_content.encode().decode('unicode_escape')
+            # エスケープ文字をデコード
+            decoded_text = codecs.decode(text_content, 'unicode_escape')
         except:
             decoded_text = text_content
         
-        # 選手クラス（B1, A1, A2など）を探す
+        # 選手クラスを抽出
         race_classes = re.findall(r'[AB][12]', decoded_text)
         
-        # 体重データを探す（選手の特定に役立つ）
-        weight_pattern = r'(\d+)\.\d+kg'
-        weights = re.findall(weight_pattern, decoded_text)
+        # 体重を抽出
+        weights = re.findall(r'(\d+)\.\d+kg', decoded_text)
+        
+        # 日本語の名前を探す（ひらがな・カタカナ・漢字）
+        japanese_names = re.findall(r'[ぁ-んァ-ン一-龯]{2,4}', decoded_text)
         
         return {
             "status": "success",
+            "racers": [
+                {
+                    "boat_number": i + 1,
+                    "name": japanese_names[i] if i < len(japanese_names) else f"選手{i+1}",
+                    "class": race_classes[i] if i < len(race_classes) else "B1",
+                    "weight": f"{weights[i]}kg" if i < len(weights) else "未定"
+                }
+                for i in range(6)
+            ],
             "debug_info": {
-                "decoded_sample": decoded_text[:2000],
                 "race_classes": race_classes[:10],
                 "weights": weights[:10],
-                "total_length": len(decoded_text)
+                "japanese_names": japanese_names[:20]
             }
         }
         
