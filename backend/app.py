@@ -92,6 +92,53 @@ def init_database():
     initialize_database()
     return jsonify({"status": "Database initialized"})
 
+# 競艇公式サイトからデータ取得（基本版）
+def get_race_info_basic(venue_code, date):
+    """基本的なレース情報取得"""
+    try:
+        # 競艇公式サイトの構造に合わせてスクレイピング
+        url = f"https://boatrace.jp/owpc/pc/race/racelist?rno=1&jcd={venue_code}&hd={date}"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, headers=headers)
+        
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.content, 'html.parser')
+            # 基本的な情報取得テスト
+            title = soup.find('title')
+            return {
+                "status": "success", 
+                "message": "データ取得成功",
+                "url": url,
+                "title": title.text if title else "タイトル不明",
+                "response_length": len(response.content)
+            }
+        else:
+            return {"status": "error", "message": f"HTTPエラー: {response.status_code}"}
+            
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# テスト用エンドポイント追加
+@app.route('/api/scrape-test', methods=['GET'])
+def test_scraping():
+    result = get_race_info_basic("01", "20250525")  # 桐生、今日の日付
+    return jsonify(result)
+
+# 会場コード一覧エンドポイント
+@app.route('/api/venues', methods=['GET'])
+def get_venues():
+    venues = {
+        "01": "桐生", "02": "戸田", "03": "江戸川", "04": "平和島",
+        "05": "多摩川", "06": "浜名湖", "07": "蒲郡", "08": "常滑",
+        "09": "津", "10": "三国", "11": "びわこ", "12": "住之江",
+        "13": "尼崎", "14": "鳴門", "15": "丸亀", "16": "児島",
+        "17": "宮島", "18": "徳山", "19": "下関", "20": "若松",
+        "21": "芦屋", "22": "福岡", "23": "唐津", "24": "大村"
+    }
+    return jsonify(venues)
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
