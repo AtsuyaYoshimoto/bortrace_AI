@@ -3,7 +3,7 @@
  */
 
 class BoatraceAPI {
-    constructor(baseUrl = 'http://localhost:5000/api') {
+    constructor(baseUrl = 'https://bortrace-ai-api-36737145161.asia-northeast1.run.app/api') {
         this.baseUrl = baseUrl;
         this.predictions = {};
         this.lastUpdated = {};
