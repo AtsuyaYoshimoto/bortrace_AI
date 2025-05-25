@@ -130,7 +130,7 @@ def extract_racer_data(html_content):
         tables = soup.find_all('table')
         tds = soup.find_all('td')
         
-        # 選手名らしきテキストを探す
+        # より長いテキストサンプルで選手データを探す
         text_content = soup.get_text()
         
         return {
@@ -138,14 +138,16 @@ def extract_racer_data(html_content):
             "debug_info": {
                 "tables_count": len(tables),
                 "tds_count": len(tds),
-                "text_sample": text_content[:1000],  # 最初の1000文字
-                "table_classes": [table.get('class') for table in tables[:3]]  # 最初の3つのテーブルのクラス
+                "text_sample": text_content[:3000],  # 3000文字に拡張
+                "text_middle": text_content[1000:2000],  # 中間部分
+                "text_end": text_content[-1000:],  # 最後の1000文字
+                "table_classes": [table.get('class') for table in tables[:3]]
             }
         }
         
     except Exception as e:
         return {"status": "error", "message": str(e)}
-
+        
 # テスト用エンドポイント追加
 @app.route('/api/scrape-test', methods=['GET'])
 def test_scraping():
