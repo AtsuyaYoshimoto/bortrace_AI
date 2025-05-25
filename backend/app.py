@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request
 import os
 import requests
+from bs4 import BeautifulSoup
 import sqlite3
 import datetime
 
