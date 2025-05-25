@@ -126,22 +126,22 @@ def extract_racer_data(html_content):
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
         
-        # 選手データの抽出（基本版）
-        racers = []
+        # デバッグ用：実際のHTML構造を調査
+        tables = soup.find_all('table')
+        tds = soup.find_all('td')
         
-        # 実際のHTML構造に合わせて要素を取得
-        # ※ 実際の構造解析が必要
-        racer_elements = soup.find_all('td', class_='racer-name')  # 仮の要素名
+        # 選手名らしきテキストを探す
+        text_content = soup.get_text()
         
-        for i, element in enumerate(racer_elements[:6]):  # 6艇分
-            racers.append({
-                "boat_number": i + 1,
-                "name": element.get_text().strip() if element else f"選手{i+1}",
-                "racer_id": f"test_{i+1}",
-                "grade": "A1"  # 仮データ
-            })
-            
-        return {"status": "success", "racers": racers}
+        return {
+            "status": "success", 
+            "debug_info": {
+                "tables_count": len(tables),
+                "tds_count": len(tds),
+                "text_sample": text_content[:1000],  # 最初の1000文字
+                "table_classes": [table.get('class') for table in tables[:3]]  # 最初の3つのテーブルのクラス
+            }
+        }
         
     except Exception as e:
         return {"status": "error", "message": str(e)}
