@@ -121,11 +121,51 @@ def get_race_info_basic(venue_code, date):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+def extract_racer_data(html_content):
+    """出走表HTMLから選手情報を抽出"""
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # 選手データの抽出（基本版）
+        racers = []
+        
+        # 実際のHTML構造に合わせて要素を取得
+        # ※ 実際の構造解析が必要
+        racer_elements = soup.find_all('td', class_='racer-name')  # 仮の要素名
+        
+        for i, element in enumerate(racer_elements[:6]):  # 6艇分
+            racers.append({
+                "boat_number": i + 1,
+                "name": element.get_text().strip() if element else f"選手{i+1}",
+                "racer_id": f"test_{i+1}",
+                "grade": "A1"  # 仮データ
+            })
+            
+        return {"status": "success", "racers": racers}
+        
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 # テスト用エンドポイント追加
 @app.route('/api/scrape-test', methods=['GET'])
 def test_scraping():
     result = get_race_info_basic("01", "20250525")  # 桐生、今日の日付
     return jsonify(result)
+
+@app.route('/api/real-data-test', methods=['GET'])
+def test_real_data():
+    # HTMLデータ取得
+    result = get_race_info_basic("01", "20250525")
+    
+    if result["status"] == "success":
+        # 実際のHTML解析（仮実装）
+        racers = extract_racer_data("<html>test</html>")  # 後で実装
+        return jsonify({
+            "data_acquisition": result,
+            "racer_extraction": racers
+        })
+    else:
+        return jsonify(result)
 
 # 会場コード一覧エンドポイント
 @app.route('/api/venues', methods=['GET'])
