@@ -158,15 +158,23 @@ def test_real_data():
     result = get_race_info_basic("01", "20250525")
     
     if result["status"] == "success":
-        # 実際のHTML解析（仮実装）
-        racers = extract_racer_data("<html>test</html>")  # 後で実装
+        # 実際に取得したHTMLを使用
+        url = result["url"]
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, headers=headers)
+        
+        # 実際のHTMLを解析
+        racers = extract_racer_data(response.content)
         return jsonify({
             "data_acquisition": result,
-            "racer_extraction": racers
+            "racer_extraction": racers,
+            "html_sample": str(response.content[:500])  # 最初の500文字をサンプル表示
         })
     else:
         return jsonify(result)
-
+        
 # 会場コード一覧エンドポイント
 @app.route('/api/venues', methods=['GET'])
 def get_venues():
