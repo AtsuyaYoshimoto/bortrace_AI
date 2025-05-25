@@ -128,23 +128,29 @@ def extract_racer_data(html_content):
         import codecs
         
         soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # より広範囲のテキスト解析
         text_content = soup.get_text()
         
-        # より強力なユニコードデコード
-        try:
-            # エスケープ文字をデコード
-            decoded_text = codecs.decode(text_content, 'unicode_escape')
-        except:
-            decoded_text = text_content
-        
         # 選手クラスを抽出
-        race_classes = re.findall(r'[AB][12]', decoded_text)
+        race_classes = re.findall(r'[AB][12]', text_content)
         
         # 体重を抽出
-        weights = re.findall(r'(\d+)\.\d+kg', decoded_text)
+        weights = re.findall(r'(\d+)\.\d+kg', text_content)
         
-        # 日本語の名前を探す（ひらがな・カタカナ・漢字）
-        japanese_names = re.findall(r'[ぁ-んァ-ン一-龯]{2,4}', decoded_text)
+        # 選手名を探すための複数のパターン
+        # パターン1: 日本語文字
+        japanese_names = re.findall(r'[ぁ-んァ-ン一-龯]{2,4}', text_content)
+        
+        # パターン2: テーブル内のデータを詳しく調査
+        tables = soup.find_all('table')
+        table_text = ""
+        for table in tables:
+            table_text += table.get_text() + "\n"
+        
+        # パターン3: td要素の中身を個別チェック
+        td_elements = soup.find_all('td')
+        td_contents = [td.get_text().strip() for td in td_elements if td.get_text().strip()]
         
         return {
             "status": "success",
@@ -160,7 +166,10 @@ def extract_racer_data(html_content):
             "debug_info": {
                 "race_classes": race_classes[:10],
                 "weights": weights[:10],
-                "japanese_names": japanese_names[:20]
+                "japanese_names": japanese_names[:20],
+                "table_sample": table_text[:1000],  # テーブル内容のサンプル
+                "td_samples": td_contents[:30],     # td要素のサンプル
+                "total_text_length": len(text_content)
             }
         }
         
