@@ -126,11 +126,9 @@ def extract_racer_data(html_content):
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
         
-        # デバッグ用：実際のHTML構造を調査
+        # より詳細なHTML構造調査
         tables = soup.find_all('table')
         tds = soup.find_all('td')
-        
-        # より長いテキストサンプルで選手データを探す
         text_content = soup.get_text()
         
         return {
@@ -139,9 +137,10 @@ def extract_racer_data(html_content):
                 "tables_count": len(tables),
                 "tds_count": len(tds),
                 "text_sample": text_content[:3000],  # 3000文字に拡張
-                "text_middle": text_content[1000:2000],  # 中間部分
+                "text_middle": text_content[2000:4000],  # 中間部分
                 "text_end": text_content[-1000:],  # 最後の1000文字
-                "table_classes": [table.get('class') for table in tables[:3]]
+                "table_classes": [table.get('class') for table in tables],
+                "td_samples": [td.get_text().strip() for td in tds[100:110]]  # td要素のサンプル
             }
         }
         
