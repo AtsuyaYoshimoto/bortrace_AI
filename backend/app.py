@@ -1,5 +1,8 @@
 from flask import Flask, jsonify, request
 import os
+import requests
+import sqlite3
+import datetime
 
 app = Flask(__name__)
 
@@ -26,6 +29,7 @@ def get_today_races():
     ]
     return jsonify(races)
 
+# 既存のエンドポイント（残す）
 @app.route('/api/prediction/<race_id>', methods=['GET', 'POST'])
 def get_race_prediction(race_id):
     # モックデータを返す
@@ -48,9 +52,9 @@ def get_race_prediction(race_id):
     }
     return jsonify(prediction)
 
+# 既存のエンドポイント（残す）
 @app.route('/api/stats', methods=['GET'])
 def get_performance_stats():
-    # モック統計データを返す
     stats = {
         "period": "過去30日間",
         "race_count": 150,
@@ -61,6 +65,32 @@ def get_performance_stats():
         "trio_hit_rate": 0.678
     }
     return jsonify(stats)
+
+# 新規追加
+def initialize_database():
+    conn = sqlite3.connect('boatrace_data.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS racers (
+        racer_id INTEGER PRIMARY KEY,
+        name TEXT,
+        gender TEXT,
+        birth_date TEXT,
+        branch TEXT,
+        rank TEXT,
+        weight REAL,
+        height REAL,
+        last_updated TEXT
+    )
+    ''')
+    conn.commit()
+    conn.close()
+
+# 新規エンドポイント
+@app.route('/api/init-db', methods=['POST'])
+def init_database():
+    initialize_database()
+    return jsonify({"status": "Database initialized"})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
