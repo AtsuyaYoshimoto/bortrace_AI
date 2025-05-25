@@ -124,23 +124,32 @@ def get_race_info_basic(venue_code, date):
 def extract_racer_data(html_content):
     """出走表HTMLから選手情報を抽出"""
     try:
-        soup = BeautifulSoup(html_content, 'html.parser')
+        import re
         
-        # より詳細なHTML構造調査
-        tables = soup.find_all('table')
-        tds = soup.find_all('td')
+        soup = BeautifulSoup(html_content, 'html.parser')
         text_content = soup.get_text()
         
+        # ユニコードエスケープ文字をデコード
+        try:
+            # ¥u形式のユニコードをデコード
+            decoded_text = text_content.encode().decode('unicode_escape')
+        except:
+            decoded_text = text_content
+        
+        # 選手クラス（B1, A1, A2など）を探す
+        race_classes = re.findall(r'[AB][12]', decoded_text)
+        
+        # 体重データを探す（選手の特定に役立つ）
+        weight_pattern = r'(\d+)\.\d+kg'
+        weights = re.findall(weight_pattern, decoded_text)
+        
         return {
-            "status": "success", 
+            "status": "success",
             "debug_info": {
-                "tables_count": len(tables),
-                "tds_count": len(tds),
-                "text_sample": text_content[:3000],  # 3000文字に拡張
-                "text_middle": text_content[2000:4000],  # 中間部分
-                "text_end": text_content[-1000:],  # 最後の1000文字
-                "table_classes": [table.get('class') for table in tables],
-                "td_samples": [td.get_text().strip() for td in tds[100:110]]  # td要素のサンプル
+                "decoded_sample": decoded_text[:2000],
+                "race_classes": race_classes[:10],
+                "weights": weights[:10],
+                "total_length": len(decoded_text)
             }
         }
         
