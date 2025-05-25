@@ -121,55 +121,49 @@ def get_race_info_basic(venue_code, date):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+
+                "total_text_length": len(text_content)
+            }
+        }
+        
 def extract_racer_data(html_content):
     """出走表HTMLから選手情報を抽出"""
     try:
         import re
-        import codecs
         
         soup = BeautifulSoup(html_content, 'html.parser')
         
-        # より広範囲のテキスト解析
-        text_content = soup.get_text()
-        
-        # 選手クラスを抽出
-        race_classes = re.findall(r'[AB][12]', text_content)
-        
-        # 体重を抽出
-        weights = re.findall(r'(\d+)\.\d+kg', text_content)
-        
-        # 選手名を探すための複数のパターン
-        # パターン1: 日本語文字
-        japanese_names = re.findall(r'[ぁ-んァ-ン一-龯]{2,4}', text_content)
-        
-        # パターン2: テーブル内のデータを詳しく調査
-        tables = soup.find_all('table')
-        table_text = ""
-        for table in tables:
-            table_text += table.get_text() + "\n"
-        
-        # パターン3: td要素の中身を個別チェック
+        # td要素を全て取得
         td_elements = soup.find_all('td')
-        td_contents = [td.get_text().strip() for td in td_elements if td.get_text().strip()]
+        
+        racers = []
+        
+        # 選手データのパターン: "登録番号 / クラス 名前 地域 年齢/体重"
+        racer_pattern = r'(\d{4})\s*/\s*([AB][12])\s*([^\s]+)\s+([^\s]+)\s+([^/]+)/([^\s]+)\s+(\d+)歳/(\d+\.\d+)kg'
+        
+        for td in td_elements:
+            text = td.get_text().strip()
+            match = re.search(racer_pattern, text)
+            
+            if match:
+                boat_number = len(racers) + 1
+                racers.append({
+                    "boat_number": boat_number,
+                    "registration_number": match.group(1),
+                    "class": match.group(2),
+                    "name": f"{match.group(3)} {match.group(4)}".strip(),
+                    "region": match.group(5),
+                    "branch": match.group(6),
+                    "age": int(match.group(7)),
+                    "weight": f"{match.group(8)}kg"
+                })
         
         return {
             "status": "success",
-            "racers": [
-                {
-                    "boat_number": i + 1,
-                    "name": japanese_names[i] if i < len(japanese_names) else f"選手{i+1}",
-                    "class": race_classes[i] if i < len(race_classes) else "B1",
-                    "weight": f"{weights[i]}kg" if i < len(weights) else "未定"
-                }
-                for i in range(6)
-            ],
+            "racers": racers,
             "debug_info": {
-                "race_classes": race_classes[:10],
-                "weights": weights[:10],
-                "japanese_names": japanese_names[:20],
-                "table_sample": table_text[:1000],  # テーブル内容のサンプル
-                "td_samples": td_contents[:30],     # td要素のサンプル
-                "total_text_length": len(text_content)
+                "found_racers": len(racers),
+                "sample_td_with_racer": [td.get_text().strip() for td in td_elements if re.search(racer_pattern, td.get_text())][:3]
             }
         }
         
