@@ -182,13 +182,6 @@ def test_scraping():
     result = get_race_info_basic("01", "20250525")  # 桐生、今日の日付
     return jsonify(result)
 
-# 📍 既存のこのエンドポイントを見つけて修正
-@app.route('/api/real-data-test', methods=['GET'])
-def real_data_test():
-    race_data = get_race_info_basic(race_url)  # ← この行を修正
-    racer_data = extract_racer_data(race_data["content"])  # ← この行を修正
-
-# 👆これを👇に修正
 @app.route('/api/real-data-test', methods=['GET'])  
 def real_data_test():
     race_data = get_race_info_improved(race_url)  # ← 修正
