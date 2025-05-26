@@ -23,9 +23,38 @@ class BoatraceAPI {
         }
     }
     
-    async getTodayRaces() { /* 既存関数 */ }
-    async getRacePrediction(raceId) { /* 既存関数 */ }
-    async getPerformanceStats() { /* 既存関数 */ }
+    async getTodayRaces() { 
+        try {
+            const response = await fetch(`${this.baseUrl}/races/today`);
+            if (!response.ok) throw new Error('レース情報取得失敗');
+            return await response.json();
+        } catch (error) {
+            console.error('APIエラー:', error);
+            return [];
+        }
+    }
+    
+    async getRacePrediction(raceId) {
+        try {
+            const response = await fetch(`${this.baseUrl}/prediction/${raceId}`);
+            if (!response.ok) throw new Error('予測データ取得失敗');
+            return await response.json();
+        } catch (error) {
+            console.error('APIエラー:', error);
+            return null;
+        }
+    }
+
+    async getPerformanceStats() {
+        try {
+            const response = await fetch(`${this.baseUrl}/stats`);
+            if (!response.ok) throw new Error('統計データ取得失敗');
+            return await response.json();
+        } catch (error) {
+            console.error('APIエラー:', error);
+            return null;
+        }
+    }
 }
 
 // グローバルインスタンス
