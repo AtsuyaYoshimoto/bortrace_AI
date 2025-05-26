@@ -4,6 +4,8 @@ import requests
 from bs4 import BeautifulSoup
 import sqlite3
 import datetime
+import time
+import random
 
 app = Flask(__name__)
 
@@ -93,78 +95,82 @@ def init_database():
     initialize_database()
     return jsonify({"status": "Database initialized"})
 
-# 競艇公式サイトからデータ取得（基本版）
-def get_race_info_basic(venue_code, date):
-    """基本的なレース情報取得"""
+@app.route('/api/real-data-test-improved', methods=['GET'])
+def real_data_test_improved():
+    """改良版のリアルデータテスト"""
     try:
-        # 競艇公式サイトの構造に合わせてスクレイピング
-        url = f"https://boatrace.jp/owpc/pc/race/racelist?rno=1&jcd={venue_code}&hd={date}"
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-        response = requests.get(url, headers=headers)
+        race_url = "https://boatrace.jp/owpc/pc/race/racelist?rno=1&jcd=01&hd=20250525"
         
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.content, 'html.parser')
-            # 基本的な情報取得テスト
-            title = soup.find('title')
-            return {
-                "status": "success", 
-                "message": "データ取得成功",
-                "url": url,
-                "title": title.text if title else "タイトル不明",
-                "response_length": len(response.content)
-            }
-        else:
-            return {"status": "error", "message": f"HTTPエラー: {response.status_code}"}
-            
+        # 段階的にアクセス
+        print("データ取得開始...")
+        race_data = get_race_info_improved(race_url)
+        
+        if race_data["status"] == "error":
+            return jsonify({
+                "error": "データ取得失敗",
+                "message": race_data["message"],
+                "suggestion": "30分後に再試行してください"
+            })
+        
+        print("選手データ抽出開始...")
+        racer_data = extract_racer_data_final(race_data["content"])
+        
+        return jsonify({
+            "data_acquisition": {
+                "status": race_data["status"],
+                "length": race_data["length"],
+                "encoding": race_data["encoding"]
+            },
+            "racer_extraction": racer_data,
+            "timestamp": datetime.now().isoformat()
+        })
+        
     except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-
-                "total_text_length": len(text_content)
-            }
-        }
+        return jsonify({
+            "error": str(e),
+            "suggestion": "システム側の問題です。後ほど再試行してください。"
+        })
         
-def extract_racer_data(html_content):
-    """出走表HTMLから選手情報を抽出"""
+def extract_racer_data_final(html_content):
+    """最終版：選手情報抽出"""
     try:
         import re
         
         soup = BeautifulSoup(html_content, 'html.parser')
         
-        # td要素を全て取得
+        # 全てのtd要素を取得
         td_elements = soup.find_all('td')
         
         racers = []
         
-        # 選手データのパターン: "登録番号 / クラス 名前 地域 年齢/体重"
-        racer_pattern = r'(\d{4})\s*/\s*([AB][12])\s*([^\s]+)\s+([^\s]+)\s+([^/]+)/([^\s]+)\s+(\d+)歳/(\d+\.\d+)kg'
+        # 選手データの正規表現パターン
+        # "4421 / B1 森作　　広大 東京/茨城 36歳/56.1kg"
+        racer_pattern = r'(\d{4})\s*/\s*([AB][12])\s*([^\n]+?)\s+([^/\n]+)/([^\n]+?)\s+(\d+)歳/(\d+\.\d+)kg'
         
         for td in td_elements:
             text = td.get_text().strip()
-            match = re.search(racer_pattern, text)
+            match = re.search(racer_pattern, text, re.MULTILINE | re.DOTALL)
             
-            if match:
-                boat_number = len(racers) + 1
+            if match and len(racers) < 6:  # 6艇まで
+                # 名前部分を整理（余分な空白を除去）
+                name_raw = match.group(3).strip()
+                name_clean = re.sub(r'\s+', ' ', name_raw).strip()
+                
                 racers.append({
-                    "boat_number": boat_number,
+                    "boat_number": len(racers) + 1,
                     "registration_number": match.group(1),
                     "class": match.group(2),
-                    "name": f"{match.group(3)} {match.group(4)}".strip(),
-                    "region": match.group(5),
-                    "branch": match.group(6),
-                    "age": int(match.group(7)),
-                    "weight": f"{match.group(8)}kg"
+                    "name": name_clean,
+                    "region": match.group(4).strip(),
+                    "branch": match.group(5).strip(),
+                    "age": int(match.group(6)),
+                    "weight": f"{match.group(7)}kg"
                 })
         
         return {
             "status": "success",
             "racers": racers,
-            "debug_info": {
-                "found_racers": len(racers),
-                "sample_td_with_racer": [td.get_text().strip() for td in td_elements if re.search(racer_pattern, td.get_text())][:3]
-            }
+            "found_count": len(racers)
         }
         
     except Exception as e:
@@ -176,10 +182,17 @@ def test_scraping():
     result = get_race_info_basic("01", "20250525")  # 桐生、今日の日付
     return jsonify(result)
 
+# 📍 既存のこのエンドポイントを見つけて修正
 @app.route('/api/real-data-test', methods=['GET'])
-def test_real_data():
-    # HTMLデータ取得
-    result = get_race_info_basic("01", "20250525")
+def real_data_test():
+    race_data = get_race_info_basic(race_url)  # ← この行を修正
+    racer_data = extract_racer_data(race_data["content"])  # ← この行を修正
+
+# 👆これを👇に修正
+@app.route('/api/real-data-test', methods=['GET'])  
+def real_data_test():
+    race_data = get_race_info_improved(race_url)  # ← 修正
+    racer_data = extract_racer_data_final(race_data["content"])  # ← 修正
     
     if result["status"] == "success":
         # 実際に取得したHTMLを使用
