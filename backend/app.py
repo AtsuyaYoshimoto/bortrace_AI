@@ -333,6 +333,54 @@ def real_data_test():
             "suggestion": "システム側の問題です。後ほど再試行してください。"
         })
 
+@app.route('/api/kyotei/<venue_code>', methods=['GET'])
+def get_kyotei_data(venue_code):
+    """指定された競艇場のデータを取得"""
+    try:
+        # 今日の日付を取得
+        today = datetime.datetime.now().strftime("%Y%m%d")
+        
+        # 動的なURL生成（venue_codeを使用）
+        race_url = f"https://boatrace.jp/owpc/pc/race/racelist?rno=1&jcd={venue_code}&hd={today}"
+        
+        print(f"データ取得開始... 会場コード: {venue_code}")
+        race_data = get_race_info_improved(race_url)
+        
+        if race_data["status"] == "error":
+            return jsonify({
+                "error": "データ取得失敗",
+                "venue_code": venue_code,
+                "message": race_data["message"],
+                "suggestion": "30分後に再試行してください"
+            })
+        
+        print("選手データ抽出開始...")
+        racer_data = extract_racer_data_final(race_data["content"])
+        
+        # 会場名を取得
+        venues = get_venues().get_json()
+        venue_info = venues.get(venue_code, {"name": "不明", "location": "不明"})
+        
+        return jsonify({
+            "venue_code": venue_code,
+            "venue_name": venue_info["name"],
+            "data_acquisition": {
+                "status": race_data["status"],
+                "length": race_data["length"],
+                "encoding": race_data["encoding"]
+            },
+            "racer_extraction": racer_data,
+            "timestamp": datetime.datetime.now().isoformat(),
+            "race_url": race_url
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "venue_code": venue_code,
+            "suggestion": "システム側の問題です。後ほど再試行してください。"
+        })
+
 # 複数レースの一括取得エンドポイント
 @app.route('/api/venue-races', methods=['GET'])
 def get_venue_races():
