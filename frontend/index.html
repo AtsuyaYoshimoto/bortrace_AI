@@ -6,16 +6,30 @@
     <title>WAVE PREDICTOR | 最先端AI競艇予想サイト</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        :root {
+            --primary: #0066cc;
+            --primary-dark: #004c99;
+            --primary-light: #4d94ff;
+            --secondary: #00ccff;
+            --accent: #ff6600;
+            --dark: #1a1a2e;
+            --light: #f5f7fa;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
+            background-color: var(--light);
             color: #333;
+            line-height: 1.6;
         }
 
         .container {
@@ -24,13 +38,13 @@
             padding: 0 20px;
         }
 
-        /* Header */
+        /* ヘッダー */
         header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
             padding: 1rem 0;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            position: fixed;
-            width: 100%;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            position: sticky;
             top: 0;
             z-index: 1000;
         }
@@ -42,49 +56,68 @@
         }
 
         .logo {
-            color: white;
+            display: flex;
+            align-items: center;
+            font-size: 1.8rem;
+            font-weight: 700;
             text-decoration: none;
-            font-size: 1.5rem;
-            font-weight: bold;
+            color: white;
         }
 
         .logo i {
-            margin-right: 0.5rem;
+            margin-right: 10px;
+            font-size: 2rem;
         }
 
         nav ul {
             display: flex;
             list-style: none;
-            align-items: center;
         }
 
-        nav ul li {
-            margin-left: 2rem;
+        nav li {
+            margin-left: 1.5rem;
         }
 
-        nav ul li a {
+        nav a {
             color: white;
             text-decoration: none;
-            transition: opacity 0.3s;
+            font-weight: 600;
+            transition: color 0.3s;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
         }
 
-        nav ul li a:hover {
-            opacity: 0.8;
+        nav a:hover {
+            background-color: rgba(255, 255, 255, 0.15);
         }
 
         .btn {
-            background: #4CAF50;
+            display: inline-block;
+            padding: 0.8rem 1.5rem;
+            background-color: var(--accent);
             color: white;
-            padding: 0.5rem 1rem;
             text-decoration: none;
-            border-radius: 5px;
-            transition: background 0.3s;
+            border-radius: 4px;
+            font-weight: 600;
+            transition: all 0.3s;
             border: none;
             cursor: pointer;
+            font-size: 1rem;
+            text-align: center;
         }
 
         .btn:hover {
-            background: #45a049;
+            background-color: #ff8533;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
         }
 
         .btn-large {
@@ -92,146 +125,200 @@
             font-size: 1.1rem;
         }
 
-        .btn-primary {
-            background: #667eea;
-        }
-
-        .btn-primary:hover {
-            background: #5a6fd8;
-        }
-
-        /* Hero Section */
+        /* ヒーローセクション */
         .hero {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            position: relative;
+            height: 500px;
+            background: url('https://placehold.co/1200x500') center/cover no-repeat;
+            display: flex;
+            align-items: center;
+            text-align: left;
             color: white;
-            text-align: center;
-            padding: 120px 0 80px;
-            margin-top: 70px;
+            overflow: hidden;
         }
 
-        .hero-content h1 {
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(0, 102, 204, 0.8) 0%, rgba(0, 204, 255, 0.6) 100%);
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 1;
+            max-width: 600px;
+            margin-left: 5%;
+            animation: fadeIn 1s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .hero h1 {
             font-size: 3rem;
             margin-bottom: 1rem;
-            font-weight: 700;
+            font-weight: 800;
+            line-height: 1.2;
         }
 
-        .hero-content p {
+        .hero p {
             font-size: 1.2rem;
             margin-bottom: 2rem;
             opacity: 0.9;
         }
 
-        /* Section Styles */
+        /* セクションタイトル */
         .section-title {
             text-align: center;
-            font-size: 2.5rem;
             margin-bottom: 3rem;
-            color: #333;
+            font-size: 2.2rem;
+            color: var(--dark);
+            position: relative;
+        }
+
+        .section-title::after {
+            content: '';
+            display: block;
+            width: 80px;
+            height: 4px;
+            background-color: var(--primary);
+            margin: 0.8rem auto;
+            border-radius: 2px;
         }
 
         section {
-            padding: 4rem 0;
+            padding: 5rem 0;
         }
 
-        /* Features */
+        /* 特徴セクション */
         .features {
-            background: #f8f9fa;
+            background-color: white;
         }
 
         .features-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 2rem;
         }
 
         .feature-card {
-            background: white;
-            padding: 2rem;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            text-align: center;
-            transition: transform 0.3s;
+            background-color: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
         }
 
         .feature-card:hover {
-            transform: translateY(-5px);
+            transform: translateY(-10px);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
         }
 
         .feature-icon {
-            font-size: 3rem;
-            color: #667eea;
+            font-size: 2.5rem;
+            color: var(--primary);
             margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100px;
+            background-color: rgba(0, 102, 204, 0.1);
+        }
+
+        .feature-content {
+            padding: 1.5rem;
         }
 
         .feature-content h3 {
+            font-size: 1.4rem;
             margin-bottom: 1rem;
-            color: #333;
+            color: var(--dark);
         }
 
-        /* Predictions Section */
+        .feature-content p {
+            color: #555;
+            margin-bottom: 1rem;
+        }
+
+        /* 予想セクション */
         .predictions {
-            background: white;
+            padding: 5rem 0;
+            background-color: #f0f5ff;
         }
 
         .race-info {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 2rem;
-            border-radius: 10px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
             margin-bottom: 2rem;
+            overflow: hidden;
+        }
+
+        /* 会場選択セクション（追加） */
+        .venue-selector {
+            padding: 1.5rem;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .venue-selector label {
+            font-weight: 600;
+            color: var(--dark);
+            min-width: 120px;
+        }
+
+        .venue-selector select {
+            padding: 0.5rem 1rem;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+            min-width: 200px;
+            flex: 1;
+        }
+
+        .venue-selector select:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
         }
 
         .race-header {
+            background-color: var(--primary);
+            color: white;
+            padding: 1rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 1rem;
-        }
-
-        .race-header h3 {
-            font-size: 1.5rem;
         }
 
         .race-details {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            display: flex;
+            flex-wrap: wrap;
             gap: 1rem;
+            padding: 1.5rem;
         }
 
         .detail-box {
-            background: rgba(255,255,255,0.1);
-            padding: 0.5rem 1rem;
-            border-radius: 5px;
-            display: flex;
-            align-items: center;
+            background-color: #f5f7fa;
+            padding: 0.8rem;
+            border-radius: 4px;
+            border-left: 4px solid var(--primary);
+            font-weight: 500;
+            flex: 1;
+            min-width: 150px;
         }
 
-        .detail-box i {
-            margin-right: 0.5rem;
-        }
-
-        /* Loading and Error States */
-        .loading {
-            text-align: center;
-            padding: 3rem;
-            color: #667eea;
-            font-size: 1.2rem;
-        }
-
-        .error {
-            background: #fed7d7;
-            color: #c53030;
-            padding: 2rem;
-            border-radius: 10px;
-            text-align: center;
-            margin: 2rem 0;
-        }
-
-        .error h3 {
-            margin-bottom: 1rem;
-        }
-
-        /* Data Status */
+        /* データ状況表示 */
         .data-status {
             text-align: center;
             margin-bottom: 2rem;
@@ -260,63 +347,78 @@
             color: #721c24;
         }
 
-        /* Prediction Table */
+        /* Loading and Error States */
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: var(--primary);
+            font-size: 1.2rem;
+        }
+
+        .error {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 2rem;
+            border-radius: 8px;
+            text-align: center;
+            margin: 2rem 0;
+        }
+
+        .error h3 {
+            margin-bottom: 1rem;
+        }
+
         .prediction-table {
             width: 100%;
             border-collapse: collapse;
-            background: white;
-            border-radius: 10px;
+            margin-top: 2rem;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
             overflow: hidden;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            margin-bottom: 2rem;
         }
 
         .prediction-table th {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-color: var(--primary);
             color: white;
             padding: 1rem;
             text-align: left;
-            font-weight: 600;
+        }
+
+        .prediction-table tr:nth-child(even) {
+            background-color: #f5f7fa;
+        }
+
+        .prediction-table tr:hover {
+            background-color: rgba(0, 102, 204, 0.05);
         }
 
         .prediction-table td {
             padding: 1rem;
-            border-bottom: 1px solid #eee;
-        }
-
-        .prediction-table tr:hover {
-            background: #f8f9fa;
-        }
-
-        .player-number {
-            background: #667eea;
-            color: white;
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
+            border-bottom: 1px solid #e0e0e0;
         }
 
         .player-name {
+            display: flex;
+            align-items: center;
             font-weight: 600;
-            color: #333;
+        }
+
+        .player-number {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+            text-align: center;
+            background-color: var(--primary);
+            color: white;
+            border-radius: 50%;
+            margin-right: 10px;
+            font-weight: bold;
         }
 
         .prediction-score {
-            font-weight: bold;
-            font-size: 1.2rem;
-            color: #667eea;
-        }
-
-        .trend-up {
-            color: #28a745;
-        }
-
-        .trend-down {
-            color: #dc3545;
+            font-weight: 700;
+            color: var(--primary-dark);
         }
 
         .class-badge {
@@ -347,32 +449,324 @@
             color: white;
         }
 
-        /* Stats Grid */
+        .trend-up {
+            color: var(--success);
+        }
+
+        .trend-down {
+            color: var(--danger);
+        }
+
+        /* 統計セクション */
+        .statistics {
+            padding: 5rem 0;
+            background-color: white;
+        }
+
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
             gap: 2rem;
-            margin-bottom: 2rem;
         }
 
         .stat-card {
-            background: white;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
             padding: 2rem;
             text-align: center;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
         }
 
         .stat-number {
             font-size: 2.5rem;
-            font-weight: bold;
-            color: #667eea;
+            font-weight: 700;
+            color: var(--primary);
             margin-bottom: 0.5rem;
         }
 
         .stat-label {
-            color: #666;
-            font-weight: 500;
+            color: #555;
+            font-size: 1.1rem;
+        }
+
+        /* AIについてのセクション */
+        .about-ai {
+            padding: 5rem 0;
+            background-color: #1a1a2e;
+            color: white;
+        }
+
+        .about-ai .section-title {
+            color: white;
+        }
+
+        .about-ai .section-title::after {
+            background-color: var(--secondary);
+        }
+
+        .ai-content {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 3rem;
+        }
+
+        .ai-image {
+            flex: 1;
+            min-width: 300px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .ai-image img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .ai-text {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .ai-text h3 {
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+            color: var(--secondary);
+        }
+
+        .ai-text p {
+            margin-bottom: 1.5rem;
+            line-height: 1.8;
+            opacity: 0.9;
+        }
+
+        .accuracy-meter {
+            background-color: rgba(255, 255, 255, 0.1);
+            height: 30px;
+            border-radius: 15px;
+            margin: 2rem 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .accuracy-fill {
+            position: absolute;
+            height: 100%;
+            width: 87%;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+            border-radius: 15px;
+            transition: width 1.5s ease-in-out;
+        }
+
+        .accuracy-text {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-weight: 700;
+            color: white;
+        }
+
+        /* ニュースセクション */
+        .news {
+            padding: 5rem 0;
+            background-color: #f5f7fa;
+        }
+
+        .news-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 2rem;
+        }
+
+        .news-card {
+            background-color: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s;
+        }
+
+        .news-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .news-image {
+            height: 200px;
+            overflow: hidden;
+        }
+
+        .news-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s;
+        }
+
+        .news-card:hover .news-image img {
+            transform: scale(1.05);
+        }
+
+        .news-content {
+            padding: 1.5rem;
+        }
+
+        .news-date {
+            font-size: 0.9rem;
+            color: #777;
+            margin-bottom: 0.5rem;
+        }
+
+        .news-title {
+            font-size: 1.3rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+            color: var(--dark);
+        }
+
+        .news-excerpt {
+            color: #555;
+            margin-bottom: 1.5rem;
+        }
+
+        /* 登録セクション */
+        .signup {
+            padding: 5rem 0;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            text-align: center;
+        }
+
+        .signup-content {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .signup h2 {
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .signup p {
+            margin-bottom: 2rem;
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .signup-form {
+            display: flex;
+            max-width: 500px;
+            margin: 0 auto;
+            overflow: hidden;
+            border-radius: 4px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        }
+
+        .signup-form input {
+            flex: 1;
+            padding: 1rem;
+            border: none;
+            font-size: 1rem;
+        }
+
+        .signup-form button {
+            padding: 1rem 2rem;
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .signup-form button:hover {
+            background-color: #ff8533;
+        }
+
+        /* フッター */
+        footer {
+            background-color: var(--dark);
+            color: white;
+            padding: 4rem 0 2rem;
+        }
+
+        .footer-content {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3rem;
+            margin-bottom: 3rem;
+        }
+
+        .footer-column {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .footer-column h3 {
+            font-size: 1.3rem;
+            margin-bottom: 1.5rem;
+            color: var(--secondary);
+        }
+
+        .footer-column ul {
+            list-style: none;
+        }
+
+        .footer-column li {
+            margin-bottom: 0.8rem;
+        }
+
+        .footer-column a {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .footer-column a:hover {
+            color: var(--secondary);
+        }
+
+        .footer-bottom {
+            text-align: center;
+            padding-top: 2rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .footer-bottom p {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+        }
+
+        .social-icons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            justify-content: center;
+        }
+
+        .social-icons a {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+
+        .social-icons a:hover {
+            background-color: var(--secondary);
+            transform: translateY(-3px);
         }
 
         /* Update Controls */
@@ -387,43 +781,53 @@
             margin-top: 1rem;
         }
 
-        /* Responsive */
+        /* レスポンシブ対応 */
         @media (max-width: 768px) {
-            .hero-content h1 {
-                font-size: 2rem;
+            nav {
+                display: none;
             }
-
-            .race-header {
+            
+            .hero {
+                height: 400px;
+                text-align: center;
+            }
+            
+            .hero-content {
+                margin: 0 auto;
+            }
+            
+            .hero h1 {
+                font-size: 2.2rem;
+            }
+            
+            .feature-card, .ai-image, .ai-text {
+                min-width: 100%;
+            }
+            
+            .signup-form {
                 flex-direction: column;
-                align-items: flex-start;
             }
-
+            
+            .signup-form input, .signup-form button {
+                width: 100%;
+            }
+            
             .prediction-table {
                 font-size: 0.9rem;
             }
 
-            .prediction-table th,
-            .prediction-table td {
-                padding: 0.5rem;
+            .venue-selector {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .venue-selector select {
+                min-width: 100%;
             }
         }
 
         .fade-in {
             animation: fadeIn 0.6s ease-in;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Footer placeholder */
-        footer {
-            background: #333;
-            color: white;
-            text-align: center;
-            padding: 2rem 0;
-            margin-top: 4rem;
         }
     </style>
 </head>
@@ -440,7 +844,7 @@
                     <li><a href="#ai-model">AIモデル</a></li>
                     <li><a href="#statistics">統計データ</a></li>
                     <li><a href="#news">ニュース</a></li>
-                    <li><a href="#signup" class="btn">会員登録</a></li>
+                    <li><a href="#signup">会員登録</a></li>
                 </ul>
             </nav>
         </div>
@@ -509,23 +913,23 @@
             <div id="error" class="error" style="display: none;">
                 <h3><i class="fas fa-exclamation-triangle"></i> データ取得エラー</h3>
                 <p id="error-message"></p>
-                <button class="btn" onclick="loadRaceData()">再試行</button>
+                <button class="btn" onclick="initApp()">再試行</button>
             </div>
 
             <!-- Race Info -->
             <div id="race-info" class="race-info" style="display: none;">
-                <section class="race-info">
-                    <div class="venue-selector">
-                        <label for="venueSelect">競艇場を選択:</label>
-                        <select id="venueSelect">
-                            <option value="">選択してください</option>
-                        </select>
-                        <button id="refreshBtn" class="btn btn-primary">更新</button>
-                    </div>
-                    
+                <!-- 会場選択セクション -->
+                <div class="venue-selector">
+                    <label for="venueSelect">競艇場を選択:</label>
+                    <select id="venueSelect">
+                        <option value="">選択してください</option>
+                    </select>
+                    <button id="refreshBtn" class="btn btn-primary">更新</button>
+                </div>
+                
                 <div class="race-header">
                     <h3 id="race-title">桐生競艇 第1レース</h3>
-                    <span id="race-date">2025年05月25日</span>
+                    <span id="race-date">2025年05月26日</span>
                 </div>
                 <div class="race-details">
                     <div class="detail-box">
@@ -564,7 +968,7 @@
                 </table>
 
                 <div class="update-controls">
-                    <button class="btn btn-primary" onclick="loadRaceData()">
+                    <button class="btn btn-primary" onclick="loadTodayRaces()">
                         <i class="fas fa-sync-alt"></i> データ更新
                     </button>
                     <div class="last-updated">
@@ -596,140 +1000,130 @@
                     <div class="stat-label">平均払戻金額</div>
                 </div>
             </div>
-            <div style="text-align: center; margin-top: 3rem;">
-                <a href="#" class="btn btn-primary">詳細な統計を見る</a>
+        </div>
+    </section>
+
+    <section class="about-ai" id="ai-model">
+        <div class="container">
+            <h2 class="section-title">AIモデルについて</h2>
+            <div class="ai-content">
+                <div class="ai-image">
+                    <img src="https://placehold.co/600x400" alt="AI分析イメージ">
+                </div>
+                <div class="ai-text">
+                    <h3>革新的な予測アルゴリズム</h3>
+                    <p>WAVE PREDICTORのAIは、過去10年間の40万レース以上のデータを学習し、選手の過去成績、コース特性、気象条件、モーター性能など、100以上の要因を総合的に分析します。</p>
+                    <p>ディープニューラルネットワークとリカレントニューラルネットワークを組み合わせた独自のアーキテクチャにより、従来の統計的手法では捉えきれない複雑なパターンを学習しています。</p>
+                    
+                    <div class="accuracy-meter">
+                        <div class="accuracy-fill"></div>
+                        <div class="accuracy-text">87% 的中率</div>
+                    </div>
+                    
+                    <p>リアルタイムでの学習機能により、日々進化し続ける予測精度を実現。レース結果を即座に学習データに反映し、より精緻な予想を提供します。</p>
+                </div>
             </div>
+        </div>
+    </section>
+
+    <section class="news" id="news">
+        <div class="container">
+            <h2 class="section-title">最新ニュース</h2>
+            <div class="news-grid">
+                <div class="news-card">
+                    <div class="news-image">
+                        <img src="https://placehold.co/400x200" alt="ニュース画像">
+                    </div>
+                    <div class="news-content">
+                        <div class="news-date">2025年5月25日</div>
+                        <h3 class="news-title">AIモデル v2.1 アップデート完了</h3>
+                        <p class="news-excerpt">新しい学習アルゴリズムにより予測精度が向上。特に荒れ模様のレースでの的中率が15%改善されました。</p>
+                        <a href="#" class="btn">詳細を見る</a>
+                    </div>
+                </div>
+                <div class="news-card">
+                    <div class="news-image">
+                        <img src="https://placehold.co/400x200" alt="ニュース画像">
+                    </div>
+                    <div class="news-content">
+                        <div class="news-date">2025年5月20日</div>
+                        <h3 class="news-title">GW期間中の予想成績発表</h3>
+                        <p class="news-excerpt">ゴールデンウィーク期間中の予想的中率が92.3%を記録。多くのユーザーから高い評価をいただきました。</p>
+                        <a href="#" class="btn">詳細を見る</a>
+                    </div>
+                </div>
+                <div class="news-card">
+                    <div class="news-image">
+                        <img src="https://placehold.co/400x200" alt="ニュース画像">
+                    </div>
+                    <div class="news-content">
+                        <div class="news-date">2025年5月15日</div>
+                        <h3 class="news-title">モバイルアプリ開発開始</h3>
+                        <p class="news-excerpt">より快適にご利用いただけるよう、iOS・Android向けモバイルアプリの開発を開始いたします。</p>
+                        <a href="#" class="btn">詳細を見る</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="signup" id="signup">
+        <div class="signup-content">
+            <h2>無料会員登録</h2>
+            <p>WAVE PREDICTORの高精度予想を今すぐ体験してください。登録は無料、わずか30秒で完了します。</p>
+            <form class="signup-form">
+                <input type="email" placeholder="メールアドレスを入力してください" required>
+                <button type="submit">今すぐ登録</button>
+            </form>
         </div>
     </section>
 
     <footer>
         <div class="container">
-            <p>&copy; 2025 WAVE PREDICTOR All Rights Reserved.</p>
+            <div class="footer-content">
+                <div class="footer-column">
+                    <h3>サービス</h3>
+                    <ul>
+                        <li><a href="#">予想一覧</a></li>
+                        <li><a href="#">AIモデル</a></li>
+                        <li><a href="#">統計データ</a></li>
+                        <li><a href="#">分析レポート</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h3>サポート</h3>
+                    <ul>
+                        <li><a href="#">ヘルプセンター</a></li>
+                        <li><a href="#">よくある質問</a></li>
+                        <li><a href="#">お問い合わせ</a></li>
+                        <li><a href="#">利用規約</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h3>会社情報</h3>
+                    <ul>
+                        <li><a href="#">運営会社</a></li>
+                        <li><a href="#">プライバシーポリシー</a></li>
+                        <li><a href="#">特定商取引法</a></li>
+                        <li><a href="#">採用情報</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h3>フォローする</h3>
+                    <div class="social-icons">
+                        <a href="#"><i class="fab fa-twitter"></i></a>
+                        <a href="#"><i class="fab fa-facebook"></i></a>
+                        <a href="#"><i class="fab fa-instagram"></i></a>
+                        <a href="#"><i class="fab fa-youtube"></i></a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 WAVE PREDICTOR All Rights Reserved.</p>
+            </div>
         </div>
     </footer>
 
-    <script>
-        // APIのベースURL
-        const API_BASE_URL = 'https://bortrace-ai-api-36737145161.asia-northeast1.run.app';
-
-        async function loadRaceData() {
-            const loading = document.getElementById('loading');
-            const error = document.getElementById('error');
-            const raceInfo = document.getElementById('race-info');
-            const predictionContainer = document.getElementById('prediction-container');
-            const statusIndicator = document.getElementById('status-indicator');
-
-            // UI状態をリセット
-            loading.style.display = 'block';
-            error.style.display = 'none';
-            raceInfo.style.display = 'none';
-            predictionContainer.style.display = 'none';
-            
-            statusIndicator.className = 'status-indicator status-loading';
-            statusIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> データ読み込み中...';
-
-            try {
-                const response = await fetch(`${API_BASE_URL}/api/real-data-test`);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP Error: ${response.status}`);
-                }
-
-                const data = await response.json();
-
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-
-                // 成功時の処理
-                loading.style.display = 'none';
-                raceInfo.style.display = 'block';
-                predictionContainer.style.display = 'block';
-                
-                statusIndicator.className = 'status-indicator status-success';
-                statusIndicator.innerHTML = '<i class="fas fa-check-circle"></i> データ取得成功';
-
-                displayRacers(data.racer_extraction.racers);
-                updateTimestamp(data.timestamp);
-
-            } catch (err) {
-                console.error('データ取得エラー:', err);
-                loading.style.display = 'none';
-                error.style.display = 'block';
-                
-                statusIndicator.className = 'status-indicator status-error';
-                statusIndicator.innerHTML = '<i class="fas fa-exclamation-triangle"></i> データ取得エラー';
-                
-                document.getElementById('error-message').textContent = err.message;
-            }
-        }
-
-        function displayRacers(racers) {
-            const tbody = document.getElementById('racers-tbody');
-            tbody.innerHTML = '';
-
-            racers.forEach((racer, index) => {
-                const row = document.createElement('tr');
-                row.className = 'fade-in';
-                row.style.animationDelay = `${index * 0.1}s`;
-                
-                // クラス別の色分け
-                let classColor = '';
-                switch(racer.class) {
-                    case 'A1': classColor = 'class-a1'; break;
-                    case 'A2': classColor = 'class-a2'; break;
-                    case 'B1': classColor = 'class-b1'; break;
-                    case 'B2': classColor = 'class-b2'; break;
-                    default: classColor = 'class-b1';
-                }
-                
-                row.innerHTML = `
-                    <td><span class="player-number">${racer.boat_number}</span></td>
-                    <td class="player-name">${racer.name}</td>
-                    <td><span class="class-badge ${classColor}">${racer.class}</span></td>
-                    <td>${racer.age}歳</td>
-                    <td>${racer.weight}</td>
-                    <td>${racer.region}</td>
-                    <td>${racer.branch}</td>
-                    <td>#${racer.registration_number}</td>
-                `;
-                
-                tbody.appendChild(row);
-            });
-        }
-
-        function updateTimestamp(timestamp) {
-            const date = new Date(timestamp);
-            const formatted = date.toLocaleString('ja-JP', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
-            document.getElementById('last-updated').textContent = formatted;
-        }
-
-        // ページ読み込み時にデータを取得
-        document.addEventListener('DOMContentLoaded', loadRaceData);
-
-        // 5分ごとに自動更新
-        setInterval(loadRaceData, 300000);
-
-        // スムーズスクロール
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                e.preventDefault();
-                const target = document.querySelector(this.getAttribute('href'));
-                if (target) {
-                    target.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'start'
-                    });
-                }
-            });
-        });
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
