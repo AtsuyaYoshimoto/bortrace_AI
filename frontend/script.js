@@ -365,10 +365,10 @@ async function loadVenues() {
         const venues = await boatraceAPI.getVenues();
         const venueSelect = document.getElementById('venueSelect');
         
-        for (const [code, name] of Object.entries(venues)) {
+        for (const [code, venueData] of Object.entries(venues)) {
             const option = document.createElement('option');
             option.value = code;
-            option.textContent = name;
+            option.textContent = `${venueData.name}（${venueData.location}）`;
             venueSelect.appendChild(option);
         }
     } catch (error) {
