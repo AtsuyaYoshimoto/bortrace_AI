@@ -5,7 +5,427 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WAVE PREDICTOR | 最先端AI競艇予想サイト</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 1rem 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .header-inner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            color: white;
+            text-decoration: none;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .logo i {
+            margin-right: 0.5rem;
+        }
+
+        nav ul {
+            display: flex;
+            list-style: none;
+            align-items: center;
+        }
+
+        nav ul li {
+            margin-left: 2rem;
+        }
+
+        nav ul li a {
+            color: white;
+            text-decoration: none;
+            transition: opacity 0.3s;
+        }
+
+        nav ul li a:hover {
+            opacity: 0.8;
+        }
+
+        .btn {
+            background: #4CAF50;
+            color: white;
+            padding: 0.5rem 1rem;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            background: #45a049;
+        }
+
+        .btn-large {
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+        }
+
+        .btn-primary {
+            background: #667eea;
+        }
+
+        .btn-primary:hover {
+            background: #5a6fd8;
+        }
+
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+            padding: 120px 0 80px;
+            margin-top: 70px;
+        }
+
+        .hero-content h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+
+        .hero-content p {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+
+        /* Section Styles */
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 3rem;
+            color: #333;
+        }
+
+        section {
+            padding: 4rem 0;
+        }
+
+        /* Features */
+        .features {
+            background: #f8f9fa;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .feature-icon {
+            font-size: 3rem;
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+
+        .feature-content h3 {
+            margin-bottom: 1rem;
+            color: #333;
+        }
+
+        /* Predictions Section */
+        .predictions {
+            background: white;
+        }
+
+        .race-info {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+        }
+
+        .race-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .race-header h3 {
+            font-size: 1.5rem;
+        }
+
+        .race-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .detail-box {
+            background: rgba(255,255,255,0.1);
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+        }
+
+        .detail-box i {
+            margin-right: 0.5rem;
+        }
+
+        /* Loading and Error States */
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: #667eea;
+            font-size: 1.2rem;
+        }
+
+        .error {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 2rem;
+            border-radius: 10px;
+            text-align: center;
+            margin: 2rem 0;
+        }
+
+        .error h3 {
+            margin-bottom: 1rem;
+        }
+
+        /* Data Status */
+        .data-status {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+            margin: 0 0.5rem;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-loading {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        /* Prediction Table */
+        .prediction-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        .prediction-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .prediction-table td {
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        .prediction-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .player-number {
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .player-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .prediction-score {
+            font-weight: bold;
+            font-size: 1.2rem;
+            color: #667eea;
+        }
+
+        .trend-up {
+            color: #28a745;
+        }
+
+        .trend-down {
+            color: #dc3545;
+        }
+
+        .class-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .class-a1 {
+            background: #ffeaa7;
+            color: #636e72;
+        }
+
+        .class-a2 {
+            background: #a29bfe;
+            color: white;
+        }
+
+        .class-b1 {
+            background: #74b9ff;
+            color: white;
+        }
+
+        .class-b2 {
+            background: #fd79a8;
+            color: white;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 2rem;
+            text-align: center;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: #666;
+            font-weight: 500;
+        }
+
+        /* Update Controls */
+        .update-controls {
+            text-align: center;
+            margin: 2rem 0;
+        }
+
+        .last-updated {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero-content h1 {
+                font-size: 2rem;
+            }
+
+            .race-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .prediction-table {
+                font-size: 0.9rem;
+            }
+
+            .prediction-table th,
+            .prediction-table td {
+                padding: 0.5rem;
+            }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.6s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Footer placeholder */
+        footer {
+            background: #333;
+            color: white;
+            text-align: center;
+            padding: 2rem 0;
+            margin-top: 4rem;
+        }
+    </style>
 </head>
 <body>
     <header>
@@ -71,138 +491,76 @@
 
     <section class="predictions" id="predictions">
         <div class="container">
-            <h2 class="section-title">今日の予想</h2>
-            <div class="race-info">
+            <h2 class="section-title">🏁 リアルタイム出走表</h2>
+            
+            <!-- データ状況表示 -->
+            <div class="data-status">
+                <span id="status-indicator" class="status-indicator status-loading">
+                    <i class="fas fa-spinner fa-spin"></i> データ読み込み中...
+                </span>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading" class="loading">
+                <p><i class="fas fa-satellite-dish"></i> 最新の出走表データを取得中...</p>
+            </div>
+
+            <!-- Error State -->
+            <div id="error" class="error" style="display: none;">
+                <h3><i class="fas fa-exclamation-triangle"></i> データ取得エラー</h3>
+                <p id="error-message"></p>
+                <button class="btn" onclick="loadRaceData()">再試行</button>
+            </div>
+
+            <!-- Race Info -->
+            <div id="race-info" class="race-info" style="display: none;">
                 <div class="race-header">
-                    <h3>住之江競艇 第12レース</h3>
-                    <span>2025年05月17日 15:30開始</span>
+                    <h3 id="race-title">桐生競艇 第1レース</h3>
+                    <span id="race-date">2025年05月25日</span>
                 </div>
                 <div class="race-details">
                     <div class="detail-box">
-                        <i class="fas fa-wind"></i> 風速: 3m/s (北東)
+                        <i class="fas fa-map-marker-alt"></i> <span id="venue-name">桐生競艇場</span>
                     </div>
                     <div class="detail-box">
-                        <i class="fas fa-water"></i> 水面: 穏やか
+                        <i class="fas fa-trophy"></i> レース番号: <span id="race-number">1R</span>
                     </div>
                     <div class="detail-box">
-                        <i class="fas fa-temperature-high"></i> 気温: 22°C
+                        <i class="fas fa-clock"></i> 最終更新: <span id="last-updated">--:--:--</span>
                     </div>
                     <div class="detail-box">
-                        <i class="fas fa-medal"></i> グレード: SG
+                        <i class="fas fa-database"></i> データ取得成功
                     </div>
                 </div>
             </div>
 
-            <table class="prediction-table">
-                <thead>
-                    <tr>
-                        <th>枠番</th>
-                        <th>選手名</th>
-                        <th>級別</th>
-                        <th>勝率</th>
-                        <th>AI予想順位</th>
-                        <th>調子</th>
-                        <th>特記事項</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><span class="player-number">1</span></td>
-                        <td class="player-name">山田太郎</td>
-                        <td>A1</td>
-                        <td>6.78</td>
-                        <td class="prediction-score">1</td>
-                        <td><i class="fas fa-arrow-up trend-up"></i> 好調</td>
-                        <td>初日からスタート絶好調</td>
-                    </tr>
-                    <tr>
-                        <td><span class="player-number">2</span></td>
-                        <td class="player-name">鈴木一郎</td>
-                        <td>A1</td>
-                        <td>6.52</td>
-                        <td class="prediction-score">3</td>
-                        <td><i class="fas fa-arrow-right"></i> 普通</td>
-                        <td>2コースでの実績高い</td>
-                    </tr>
-                    <tr>
-                        <td><span class="player-number">3</span></td>
-                        <td class="player-name">佐藤次郎</td>
-                        <td>A1</td>
-                        <td>7.01</td>
-                        <td class="prediction-score">2</td>
-                        <td><i class="fas fa-arrow-up trend-up"></i> 好調</td>
-                        <td>展示タイム1着</td>
-                    </tr>
-                    <tr>
-                        <td><span class="player-number">4</span></td>
-                        <td class="player-name">田中三郎</td>
-                        <td>A2</td>
-                        <td>5.43</td>
-                        <td class="prediction-score">5</td>
-                        <td><i class="fas fa-arrow-down trend-down"></i> 不調</td>
-                        <td>直近成績振るわず</td>
-                    </tr>
-                    <tr>
-                        <td><span class="player-number">5</span></td>
-                        <td class="player-name">高橋四郎</td>
-                        <td>A1</td>
-                        <td>6.21</td>
-                        <td class="prediction-score">4</td>
-                        <td><i class="fas fa-arrow-right"></i> 普通</td>
-                        <td>住之江得意選手</td>
-                    </tr>
-                    <tr>
-                        <td><span class="player-number">6</span></td>
-                        <td class="player-name">伊藤五郎</td>
-                        <td>A2</td>
-                        <td>5.19</td>
-                        <td class="prediction-score">6</td>
-                        <td><i class="fas fa-arrow-down trend-down"></i> 不調</td>
-                        <td>モーター不調気味</td>
-                    </tr>
-                </tbody>
-            </table>
+            <!-- Prediction Table -->
+            <div id="prediction-container" style="display: none;">
+                <table class="prediction-table fade-in">
+                    <thead>
+                        <tr>
+                            <th>枠番</th>
+                            <th>選手名</th>
+                            <th>級別</th>
+                            <th>年齢</th>
+                            <th>体重</th>
+                            <th>地域</th>
+                            <th>支部</th>
+                            <th>登録番号</th>
+                        </tr>
+                    </thead>
+                    <tbody id="racers-tbody">
+                        <!-- 選手データが動的に挿入されます -->
+                    </tbody>
+                </table>
 
-            <div style="text-align: center; margin-top: 2rem;">
-                <a href="#" class="btn btn-primary">他のレース予想を見る</a>
-            </div>
-        </div>
-    </section>
-
-    <section class="ai-model" id="ai-model">
-        <div class="container">
-            <h2 class="section-title">AIモデルの詳細</h2>
-            <div class="model-tabs">
-                <button class="model-tab active">基本性能</button>
-                <button class="model-tab">学習データ</button>
-                <button class="model-tab">精度評価</button>
-            </div>
-            <div class="model-content">
-                <div class="model-description">
-                    <h3>WAVE PREDICTOR AI v3.0</h3>
-                    <p>最先端のディープラーニング技術を駆使した、競艇レース専用の予測AIです。選手の過去の成績、モーター性能、ボート特性、天候条件など、あらゆる要素を分析し、高精度な順位予想を実現しています。</p>
-                    <p>さらに、リアルタイムデータを取り込むことで、レース直前の状況変化にも即座に対応。常に最新の情報に基づいた予想を提供します。</p>
-                </div>
-                <div class="model-stats">
-                    <div class="model-stat">
-                        <div class="model-stat-number">87%</div>
-                        <div class="model-stat-label">的中率（3連単）</div>
+                <div class="update-controls">
+                    <button class="btn btn-primary" onclick="loadRaceData()">
+                        <i class="fas fa-sync-alt"></i> データ更新
+                    </button>
+                    <div class="last-updated">
+                        APIサーバー: <strong>動作中</strong> | 自動更新: <strong>5分間隔</strong>
                     </div>
-                    <div class="model-stat">
-                        <div class="model-stat-number">92%</div>
-                        <div class="model-stat-label">的中率（3連複）</div>
-                    </div>
-                    <div class="model-stat">
-                        <div class="model-stat-number">95%</div>
-                        <div class="model-stat-label">的中率（2連単）</div>
-                    </div>
-                    <div class="model-stat">
-                        <div class="model-stat-number">45,000+</div>
-                        <div class="model-stat-label">学習レース数</div>
-                    </div>
-                </div>
-                <div class="model-graph">
-                    <img src="https://picsum.photos/800/300" alt="AI精度グラフ" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
                 </div>
             </div>
         </div>
@@ -235,134 +593,134 @@
         </div>
     </section>
 
-    <section class="about-ai">
-        <div class="container">
-            <h2 class="section-title">AIの仕組み</h2>
-            <div class="ai-content">
-                <div class="ai-image">
-                    <img src="https://picsum.photos/600/400" alt="AIの仕組み図" style="width: 100%; height: 100%; object-fit: cover;">
-                </div>
-                <div class="ai-text">
-                    <h3>なぜWAVE PREDICTORは高精度なのか？</h3>
-                    <p>通常の統計分析と異なり、WAVE PREDICTORは深層学習（ディープラーニング）技術を駆使し、複雑なパターンを見つけ出します。選手の調子、モーターの性能、ボートの特性、水面状況、天候条件など、あらゆる要素を総合的に分析。</p>
-                    <p>さらに、レース直前の展示タイムやスタート展示の様子、選手のコメントなど、リアルタイムデータを即座に反映させることで、他の予想システムでは実現できない精度を実現しています。</p>
-                    <div class="accuracy-meter">
-                        <div class="accuracy-fill"></div>
-                        <span class="accuracy-text">精度87%</span>
-                    </div>
-                    <a href="#" class="btn">AI技術の詳細を見る</a>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section class="news" id="news">
-        <div class="container">
-            <h2 class="section-title">最新ニュース</h2>
-            <div class="news-grid">
-                <div class="news-card">
-                    <div class="news-image">
-                        <img src="https://picsum.photos/400/200" alt="ニュース画像">
-                    </div>
-                    <div class="news-content">
-                        <div class="news-date">2025年5月15日</div>
-                        <h3 class="news-title">SGボートレースクラシック開幕！注目選手は？</h3>
-                        <p class="news-excerpt">今年のSGボートレースクラシックが開幕。昨年王者の山田太郎選手を始め、多くのトップレーサーが集結...</p>
-                        <a href="#" class="btn">続きを読む</a>
-                    </div>
-                </div>
-                <div class="news-card">
-                    <div class="news-image">
-                        <img src="https://picsum.photos/400/200" alt="ニュース画像">
-                    </div>
-                    <div class="news-content">
-                        <div class="news-date">2025年5月10日</div>
-                        <h3 class="news-title">AIモデルが大幅アップデート！予想精度向上</h3>
-                        <p class="news-excerpt">WAVE PREDICTOR AIが最新バージョンにアップデート。新たな学習データと改良されたアルゴリズムにより、的中率が向上...</p>
-                        <a href="#" class="btn">続きを読む</a>
-                    </div>
-                </div>
-                <div class="news-card">
-                    <div class="news-image">
-                        <img src="https://picsum.photos/400/200" alt="ニュース画像">
-                    </div>
-                    <div class="news-content">
-                        <div class="news-date">2025年5月5日</div>
-                        <h3 class="news-title">注目の若手選手、全国制覇へ</h3>
-                        <p class="news-excerpt">デビュー2年目にして各地で優勝を重ねる佐藤次郎選手。今季の目標と戦略を独占インタビュー...</p>
-                        <a href="#" class="btn">続きを読む</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section class="signup" id="signup">
-        <div class="container">
-            <div class="signup-content">
-                <h2>プレミアム会員登録</h2>
-                <p>WAVE PREDICTORの全機能を利用して、勝率を大幅に向上させませんか？無料会員では利用できない詳細分析や、AIの予想根拠など、勝利に直結する情報が手に入ります。</p>
-                <form class="signup-form">
-                    <input type="email" placeholder="メールアドレスを入力" required>
-                    <button type="submit">無料体験を始める</button>
-                </form>
-                <p style="margin-top: 1rem; font-size: 0.9rem; opacity: 0.8;">※7日間の無料体験後、月額2,980円（税込）が発生します</p>
-            </div>
-        </div>
-    </section>
-
     <footer>
         <div class="container">
-            <div class="footer-content">
-                <div class="footer-column">
-                    <h3>WAVE PREDICTOR</h3>
-                    <p>最先端のAI技術で競艇ファンの勝利をサポートします。常に進化し続ける予想システムで、あなたのボートレース体験を革新します。</p>
-                    <div class="social-icons">
-                        <a href="#"><i class="fab fa-twitter"></i></a>
-                        <a href="#"><i class="fab fa-facebook-f"></i></a>
-                        <a href="#"><i class="fab fa-instagram"></i></a>
-                        <a href="#"><i class="fab fa-youtube"></i></a>
-                    </div>
-                </div>
-                <div class="footer-column">
-                    <h3>コンテンツ</h3>
-                    <ul>
-                        <li><a href="#predictions">今日の予想</a></li>
-                        <li><a href="#ai-model">AIモデル</a></li>
-                        <li><a href="#statistics">統計データ</a></li>
-                        <li><a href="#news">ニュース</a></li>
-                        <li><a href="#">過去の的中実績</a></li>
-                        <li><a href="#">選手データベース</a></li>
-                    </ul>
-                </div>
-                <div class="footer-column">
-                    <h3>会員プラン</h3>
-                    <ul>
-                        <li><a href="#">無料会員</a></li>
-                        <li><a href="#">プレミアム会員</a></li>
-                        <li><a href="#">VIP会員</a></li>
-                        <li><a href="#">法人プラン</a></li>
-                        <li><a href="#">料金比較</a></li>
-                    </ul>
-                </div>
-                <div class="footer-column">
-                    <h3>お問い合わせ</h3>
-                    <ul>
-                        <li><a href="#">サポート</a></li>
-                        <li><a href="#">よくある質問</a></li>
-                        <li><a href="#">利用規約</a></li>
-                        <li><a href="#">プライバシーポリシー</a></li>
-                        <li><a href="#">運営会社</a></li>
-                    </ul>
-                </div>
-            </div>
-            <div class="footer-bottom">
-                <p>&copy; 2025 WAVE PREDICTOR All Rights Reserved.</p>
-            </div>
+            <p>&copy; 2025 WAVE PREDICTOR All Rights Reserved.</p>
         </div>
     </footer>
 
-    <script src="api.js"></script>
-    <script src="script.js"></script>
+    <script>
+        // APIのベースURL
+        const API_BASE_URL = 'https://bortrace-ai-api-36737145161.asia-northeast1.run.app';
+
+        async function loadRaceData() {
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const raceInfo = document.getElementById('race-info');
+            const predictionContainer = document.getElementById('prediction-container');
+            const statusIndicator = document.getElementById('status-indicator');
+
+            // UI状態をリセット
+            loading.style.display = 'block';
+            error.style.display = 'none';
+            raceInfo.style.display = 'none';
+            predictionContainer.style.display = 'none';
+            
+            statusIndicator.className = 'status-indicator status-loading';
+            statusIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> データ読み込み中...';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/real-data-test`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP Error: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                // 成功時の処理
+                loading.style.display = 'none';
+                raceInfo.style.display = 'block';
+                predictionContainer.style.display = 'block';
+                
+                statusIndicator.className = 'status-indicator status-success';
+                statusIndicator.innerHTML = '<i class="fas fa-check-circle"></i> データ取得成功';
+
+                displayRacers(data.racer_extraction.racers);
+                updateTimestamp(data.timestamp);
+
+            } catch (err) {
+                console.error('データ取得エラー:', err);
+                loading.style.display = 'none';
+                error.style.display = 'block';
+                
+                statusIndicator.className = 'status-indicator status-error';
+                statusIndicator.innerHTML = '<i class="fas fa-exclamation-triangle"></i> データ取得エラー';
+                
+                document.getElementById('error-message').textContent = err.message;
+            }
+        }
+
+        function displayRacers(racers) {
+            const tbody = document.getElementById('racers-tbody');
+            tbody.innerHTML = '';
+
+            racers.forEach((racer, index) => {
+                const row = document.createElement('tr');
+                row.className = 'fade-in';
+                row.style.animationDelay = `${index * 0.1}s`;
+                
+                // クラス別の色分け
+                let classColor = '';
+                switch(racer.class) {
+                    case 'A1': classColor = 'class-a1'; break;
+                    case 'A2': classColor = 'class-a2'; break;
+                    case 'B1': classColor = 'class-b1'; break;
+                    case 'B2': classColor = 'class-b2'; break;
+                    default: classColor = 'class-b1';
+                }
+                
+                row.innerHTML = `
+                    <td><span class="player-number">${racer.boat_number}</span></td>
+                    <td class="player-name">${racer.name}</td>
+                    <td><span class="class-badge ${classColor}">${racer.class}</span></td>
+                    <td>${racer.age}歳</td>
+                    <td>${racer.weight}</td>
+                    <td>${racer.region}</td>
+                    <td>${racer.branch}</td>
+                    <td>#${racer.registration_number}</td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+
+        function updateTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            const formatted = date.toLocaleString('ja-JP', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            document.getElementById('last-updated').textContent = formatted;
+        }
+
+        // ページ読み込み時にデータを取得
+        document.addEventListener('DOMContentLoaded', loadRaceData);
+
+        // 5分ごとに自動更新
+        setInterval(loadRaceData, 300000);
+
+        // スムーズスクロール
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+    </script>
 </body>
 </html>
