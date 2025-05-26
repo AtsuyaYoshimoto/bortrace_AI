@@ -2,6 +2,35 @@
  * 競艇予想サイトのメインJavaScriptファイル
  */
 
+/**
+ * 競艇AI予測API連携モジュール
+ */
+class BoatraceAPI {
+    constructor(baseUrl = 'https://bortrace-ai-api-36737145161.asia-northeast1.run.app/api') {
+        this.baseUrl = baseUrl;
+    }
+    
+    async getVenues() {
+        try {
+            const response = await fetch(`${this.baseUrl}/venues`);
+            if (!response.ok) {
+                throw new Error('会場情報の取得に失敗しました');
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('APIエラー:', error);
+            return {};
+        }
+    }
+    
+    async getTodayRaces() { /* 既存関数 */ }
+    async getRacePrediction(raceId) { /* 既存関数 */ }
+    async getPerformanceStats() { /* 既存関数 */ }
+}
+
+// グローバルインスタンス
+const boatraceAPI = new BoatraceAPI();
+
 document.addEventListener('DOMContentLoaded', function() {
     // 初期化
     initApp();
@@ -329,5 +358,33 @@ async function loadVenueData(venueCode) {
         }
     } catch (error) {
         console.error('会場データ取得エラー:', error);
+    }
+}
+
+// 実際のレースデータでテーブルを更新
+function updateRaceDataTable(data) {
+    const tbody = document.querySelector('.prediction-table tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    data.racer_extraction.racers.forEach(racer => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td><span class="player-number">${racer.boat_number}</span></td>
+            <td class="player-name">${racer.name}</td>
+            <td>${racer.class}</td>
+            <td>${racer.age}歳</td>
+            <td class="prediction-score">-</td>
+            <td>${racer.weight}</td>
+            <td>${racer.region}/${racer.branch}</td>
+        `;
+        tbody.appendChild(row);
+    });
+    
+    // 会場名を更新
+    const raceHeader = document.querySelector('.race-header h3');
+    if (raceHeader) {
+        raceHeader.textContent = `${data.venue_name}競艇 第1レース`;
     }
 }
