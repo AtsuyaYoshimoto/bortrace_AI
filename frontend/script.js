@@ -18,6 +18,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // アプリケーション初期化
 async function initApp() {
+
+    await loadVenues(); 
+    
     // 今日のレース情報を取得
     await loadTodayRaces();
     
@@ -263,6 +266,22 @@ function initEventListeners() {
             alert(`${email} を登録しました。メールをご確認ください。`);
         });
     }
+
+    const venueSelect = document.getElementById('venueSelect');
+    const refreshBtn = document.getElementById('refreshBtn');
+    
+    venueSelect.addEventListener('change', function() {
+        if (this.value) {
+            loadVenueData(this.value);
+        }
+    });
+    
+    refreshBtn.addEventListener('click', function() {
+        const selectedVenue = venueSelect.value;
+        if (selectedVenue) {
+            loadVenueData(selectedVenue);
+        }
+    });
     
     // ナビゲーションリンク（スムーズスクロール）
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
@@ -280,4 +299,35 @@ function initEventListeners() {
             }
         });
     });
+}
+
+// 会場一覧を読み込む
+async function loadVenues() {
+    try {
+        const venues = await boatraceAPI.getVenues();
+        const venueSelect = document.getElementById('venueSelect');
+        
+        for (const [code, name] of Object.entries(venues)) {
+            const option = document.createElement('option');
+            option.value = code;
+            option.textContent = name;
+            venueSelect.appendChild(option);
+        }
+    } catch (error) {
+        console.error('会場一覧取得エラー:', error);
+    }
+}
+
+// 選択した会場のデータを取得
+async function loadVenueData(venueCode) {
+    try {
+        const response = await fetch(`${boatraceAPI.baseUrl}/kyotei/${venueCode}`);
+        const data = await response.json();
+        
+        if (data.racer_extraction && data.racer_extraction.racers) {
+            updateRaceDataTable(data);
+        }
+    } catch (error) {
+        console.error('会場データ取得エラー:', error);
+    }
 }
