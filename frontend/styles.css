@@ -255,11 +255,13 @@ nav a:hover {
     display: flex;
     align-items: center;
     gap: 1rem;
+    flex-wrap: wrap;
 }
 
 .venue-selector label {
     font-weight: 600;
     color: var(--dark);
+    min-width: 120px;
 }
 
 .venue-selector select {
@@ -268,11 +270,24 @@ nav a:hover {
     border-radius: 4px;
     font-size: 1rem;
     min-width: 200px;
+    flex: 1;
 }
 
 .venue-selector select:focus {
     border-color: var(--primary);
     outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+}
+
+@media (max-width: 768px) {
+    .venue-selector {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .venue-selector select {
+        min-width: 100%;
+    }
 }
 
 .race-header {
