@@ -83,11 +83,6 @@ def get_venues():
     }
     return jsonify(venues)
 
-# 既存の /api/venues エンドポイントを修正
-@app.route('/api/venues', methods=['GET'])
-def get_venues():
-    return jsonify(VENUES)  # 定数を使用
-
 # 新しい /api/kyotei/<venue_code> エンドポイント
 @app.route('/api/kyotei/<venue_code>', methods=['GET'])
 def get_kyotei_data(venue_code):
