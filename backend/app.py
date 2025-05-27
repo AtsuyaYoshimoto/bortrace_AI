@@ -294,10 +294,17 @@ def get_race_data():
             "suggestion": "システム側の問題です。後ほど再試行してください。"
         }), 500
 
-# 後方互換性のための既存エンドポイント
 @app.route('/api/real-data-test', methods=['GET'])  
 def real_data_test():
-    """既存エンドポイント（桐生1Rのデータ取得）"""
+    """既存エンドポイント（桐生1R・キャッシュ対応版）"""
+    cache_key = "real_data_test_01"
+    
+    # キャッシュ確認
+    cached_result = get_cached_data(cache_key, 30)  # 30分キャッシュ
+    if cached_result:
+        print("キャッシュからデータを返却")
+        return jsonify(cached_result)
+    
     try:
         venue_code = '01'
         race_number = '1'
@@ -318,7 +325,7 @@ def real_data_test():
         print("選手データ抽出開始...")
         racer_data = extract_racer_data_final(race_data["content"])
         
-        return jsonify({
+        result = {
             "data_acquisition": {
                 "status": race_data["status"],
                 "length": race_data["length"],
@@ -327,14 +334,19 @@ def real_data_test():
             "racer_extraction": racer_data,
             "timestamp": datetime.datetime.now().isoformat(),
             "html_sample": str(race_data["content"][:500])
-        })
+        }
+        
+        # キャッシュに保存
+        set_cached_data(cache_key, result)
+        
+        return jsonify(result)
         
     except Exception as e:
         return jsonify({
             "error": str(e),
             "suggestion": "システム側の問題です。後ほど再試行してください。"
         })
-
+        
 @app.route('/api/kyotei/<venue_code>', methods=['GET'])
 def get_kyotei_data(venue_code):
     """指定された競艇場のデータを取得（キャッシュ対応版）"""
