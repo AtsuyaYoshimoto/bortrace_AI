@@ -104,6 +104,60 @@ async function loadTodayRaces() {
     }
 }
 
+async function loadRealTimeData() {
+    const loading = document.getElementById('loading');
+    const error = document.getElementById('error');
+    const raceInfo = document.getElementById('race-info');
+    const predictionContainer = document.getElementById('prediction-container');
+    const statusIndicator = document.getElementById('status-indicator');
+
+    try {
+        // UI状態をリセット
+        loading.style.display = 'block';
+        error.style.display = 'none';
+        raceInfo.style.display = 'none';
+        predictionContainer.style.display = 'none';
+        
+        statusIndicator.className = 'status-indicator status-loading';
+        statusIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> データ読み込み中...';
+
+        // APIからリアルタイムデータを取得
+        const response = await fetch(`${boatraceAPI.baseUrl}/real-data-test`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP Error: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        // 成功時の処理
+        loading.style.display = 'none';
+        raceInfo.style.display = 'block';
+        predictionContainer.style.display = 'block';
+        
+        statusIndicator.className = 'status-indicator status-success';
+        statusIndicator.innerHTML = '<i class="fas fa-check-circle"></i> データ取得成功';
+
+        // 実際のデータを表示
+        displayRealRacers(data.racer_extraction.racers);
+        updateTimestamp(data.timestamp);
+
+    } catch (err) {
+        console.error('データ取得エラー:', err);
+        loading.style.display = 'none';
+        error.style.display = 'block';
+        
+        statusIndicator.className = 'status-indicator status-error';
+        statusIndicator.innerHTML = '<i class="fas fa-exclamation-triangle"></i> データ取得エラー';
+        
+        document.getElementById('error-message').textContent = err.message;
+    }
+}
+
 // レース予測を表示
 async function displayRacePrediction(raceId) {
     try {
@@ -408,4 +462,53 @@ function updateRaceDataTable(data) {
     if (raceHeader) {
         raceHeader.textContent = `${data.venue_name}競艇 第1レース`;
     }
+}
+
+// 実際の選手データを表示（追加が必要）
+function displayRealRacers(racers) {
+    const tbody = document.getElementById('racers-tbody');
+    tbody.innerHTML = '';
+
+    racers.forEach((racer, index) => {
+        const row = document.createElement('tr');
+        row.className = 'fade-in';
+        row.style.animationDelay = `${index * 0.1}s`;
+        
+        // クラス別の色分け
+        let classColor = '';
+        switch(racer.class) {
+            case 'A1': classColor = 'class-a1'; break;
+            case 'A2': classColor = 'class-a2'; break;
+            case 'B1': classColor = 'class-b1'; break;
+            case 'B2': classColor = 'class-b2'; break;
+            default: classColor = 'class-b1';
+        }
+        
+        row.innerHTML = `
+            <td><span class="player-number">${racer.boat_number}</span></td>
+            <td class="player-name">${racer.name}</td>
+            <td><span class="class-badge ${classColor}">${racer.class}</span></td>
+            <td>${racer.age}歳</td>
+            <td>${racer.weight}</td>
+            <td>${racer.region}</td>
+            <td>${racer.branch}</td>
+            <td>#${racer.registration_number}</td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+}
+
+// タイムスタンプ更新（追加が必要）
+function updateTimestamp(timestamp) {
+    const date = new Date(timestamp);
+    const formatted = date.toLocaleString('ja-JP', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+    document.getElementById('last-updated').textContent = formatted;
 }
