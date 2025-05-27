@@ -224,7 +224,7 @@ def build_race_url(venue_code, race_number, date_str):
 
 def get_today_date():
     """今日の日付を取得（YYYYMMDD形式）"""
-    return datetime.datetime.now().strftime("%Y%m%d")
+    return datetime.now().strftime("%Y%m%d")
 
 # 拡張版のスクレイピングエンドポイント
 @app.route('/api/race-data', methods=['GET'])
@@ -285,7 +285,7 @@ def get_race_data():
                 "date": date_str
             },
             "racer_extraction": racer_data,
-            "timestamp": datetime.datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat()
         })
         
     except Exception as e:
@@ -332,7 +332,7 @@ def real_data_test():
                 "encoding": race_data["encoding"]
             },
             "racer_extraction": racer_data,
-            "timestamp": datetime.datetime.now().isoformat(),
+            "timestamp": datetime.now().isoformat(),
             "html_sample": str(race_data["content"][:500])
         }
         
@@ -392,7 +392,7 @@ def get_kyotei_data(venue_code):
                 "encoding": race_data["encoding"]
             },
             "racer_extraction": racer_data,
-            "timestamp": datetime.datetime.now().isoformat(),
+            "timestamp": datetime.now().isoformat(),
             "race_url": race_url
         }
         
@@ -470,7 +470,7 @@ def get_venue_races():
             "races": results,
             "total_races": len(results),
             "successful_races": len([r for r in results if r["status"] == "success"]),
-            "timestamp": datetime.datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat()
         })
         
     except Exception as e:
