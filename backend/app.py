@@ -7,6 +7,8 @@ import datetime
 import time
 import random
 import re
+import threading
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
@@ -451,6 +453,23 @@ def get_venue_races():
             "error": str(e),
             "suggestion": "システム側の問題です。後ほど再試行してください。"
         }), 500
+
+cache_data = {}
+cache_lock = threading.Lock()
+
+def get_cached_data(cache_key, expiry_minutes=30):
+    """キャッシュからデータを取得"""
+    with cache_lock:
+        if cache_key in cache_data:
+            data, timestamp = cache_data[cache_key]
+            if datetime.now() - timestamp < timedelta(minutes=expiry_minutes):
+                return data
+    return None
+
+def set_cached_data(cache_key, data):
+    """キャッシュにデータを保存"""
+    with cache_lock:
+        cache_data[cache_key] = (data, datetime.now())
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
