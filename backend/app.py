@@ -155,7 +155,7 @@ def get_race_info_improved(race_url):
     
     try:
         # 固定の遅延（2秒）
-        time.sleep(2)
+        time.sleep(0.5)
         
         response = requests.get(race_url, headers=headers, timeout=30)
         response.raise_for_status()
