@@ -74,21 +74,13 @@ document.addEventListener('DOMContentLoaded', function() {
     initEventListeners();
 });
 
-// アプリケーション初期化
 async function initApp() {
-
     await loadVenues(); 
-    
-    // 今日のレース情報を取得
-    await loadTodayRaces();
-    
-    // パフォーマンス統計を更新
+    await loadRealTimeData();  // ← 新しい関数
     await updatePerformanceStats();
-    
-    // 定期的な更新を設定
     setInterval(async () => {
-        await loadTodayRaces();
-    }, 5 * 60 * 1000); // 5分ごとに更新
+        await loadRealTimeData();
+    }, 5 * 60 * 1000);
 }
 
 // 今日のレース情報を読み込む
