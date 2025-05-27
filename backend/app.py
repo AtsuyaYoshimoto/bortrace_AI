@@ -337,7 +337,15 @@ def real_data_test():
 
 @app.route('/api/kyotei/<venue_code>', methods=['GET'])
 def get_kyotei_data(venue_code):
-    """指定された競艇場のデータを取得"""
+    """指定された競艇場のデータを取得（キャッシュ対応版）"""
+    cache_key = f"kyotei_data_{venue_code}"
+    
+    # キャッシュ確認
+    cached_result = get_cached_data(cache_key, 30)  # 30分キャッシュ
+    if cached_result:
+        print(f"キャッシュからデータを返却: {venue_code}")
+        return jsonify(cached_result)
+    
     try:
         # 今日の日付を取得
         today = datetime.datetime.now().strftime("%Y%m%d")
@@ -363,7 +371,7 @@ def get_kyotei_data(venue_code):
         venues = get_venues().get_json()
         venue_info = venues.get(venue_code, {"name": "不明", "location": "不明"})
         
-        return jsonify({
+        result = {
             "venue_code": venue_code,
             "venue_name": venue_info["name"],
             "data_acquisition": {
@@ -374,7 +382,12 @@ def get_kyotei_data(venue_code):
             "racer_extraction": racer_data,
             "timestamp": datetime.datetime.now().isoformat(),
             "race_url": race_url
-        })
+        }
+        
+        # キャッシュに保存
+        set_cached_data(cache_key, result)
+        
+        return jsonify(result)
         
     except Exception as e:
         return jsonify({
