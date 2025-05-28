@@ -801,3 +801,364 @@ footer {
         font-size: 0.9rem;
     }
 }
+
+/* ==========================================
+   AI予想機能 - 既存styles.cssの最後に追加
+   ========================================== */
+
+/* AI予想セクション */
+.ai-predictions {
+    padding: 5rem 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.ai-predictions .section-title {
+    color: white;
+}
+
+.ai-predictions .section-title::after {
+    background-color: #fff;
+}
+
+/* 予想カードレイアウト */
+.prediction-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 2rem;
+    margin-bottom: 3rem;
+}
+
+.prediction-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    transition: transform 0.3s ease;
+    color: #333;
+}
+
+.prediction-card:hover {
+    transform: translateY(-5px);
+}
+
+.card-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    padding: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.card-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+}
+
+.confidence-badge, .expected-value {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 0.3rem 0.8rem;
+    border-radius: 15px;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.card-content {
+    padding: 2rem;
+}
+
+/* 勝率予測カード */
+.prediction-result {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.predicted-winner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.winner-number {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, var(--accent) 0%, #ff8533 100%);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.winner-name {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--dark);
+}
+
+.win-probability {
+    text-align: center;
+}
+
+.win-probability span {
+    display: block;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.win-probability small {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+/* 舟券推奨カード */
+.ticket-suggestions {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.ticket-type {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.8rem;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    border-left: 4px solid var(--primary);
+}
+
+.ticket-type label {
+    font-weight: 600;
+    color: var(--dark);
+}
+
+.ticket-type span {
+    font-weight: 700;
+    color: var(--primary);
+    font-family: monospace;
+}
+
+/* リスク分析カード */
+.risk-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.risk-meter {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.meter-label {
+    font-weight: 600;
+    color: var(--dark);
+    font-size: 0.9rem;
+}
+
+.meter-bar {
+    height: 20px;
+    background-color: #e0e0e0;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+}
+
+.meter-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--success) 0%, var(--primary) 100%);
+    border-radius: 10px;
+    transition: width 1s ease-in-out;
+    position: relative;
+}
+
+.meter-fill.risk {
+    background: linear-gradient(90deg, var(--warning) 0%, var(--danger) 100%);
+}
+
+/* 詳細分析テーブル */
+.detailed-analysis {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    color: #333;
+}
+
+.detailed-analysis h3 {
+    margin-bottom: 1.5rem;
+    color: var(--dark);
+    font-size: 1.4rem;
+}
+
+.ai-analysis-table {
+    width: 100%;
+    border-collapse: collapse;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.ai-analysis-table th {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    padding: 1rem;
+    text-align: left;
+    font-weight: 600;
+}
+
+.ai-analysis-table td {
+    padding: 1rem;
+    border-bottom: 1px solid #e0e0e0;
+    vertical-align: middle;
+}
+
+.ai-analysis-table tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+.ai-analysis-table tr:hover {
+    background-color: rgba(0, 102, 204, 0.05);
+}
+
+/* AI予測順位のスタイル */
+.ai-rank {
+    display: inline-block;
+    width: 30px;
+    height: 30px;
+    line-height: 30px;
+    text-align: center;
+    border-radius: 50%;
+    font-weight: 700;
+    color: white;
+}
+
+.rank-1 { background-color: #ffd700; color: #333; }
+.rank-2 { background-color: #c0c0c0; color: #333; }
+.rank-3 { background-color: #cd7f32; color: white; }
+.rank-4, .rank-5, .rank-6 { background-color: #666; }
+
+/* 勝率表示 */
+.win-prob {
+    font-weight: 700;
+    color: var(--primary);
+    font-size: 1.1rem;
+}
+
+/* 調子指数 */
+.condition-index {
+    font-weight: 600;
+    padding: 0.3rem 0.6rem;
+    border-radius: 12px;
+    text-align: center;
+}
+
+.condition-index.excellent {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.condition-index.good {
+    background-color: #cce5ff;
+    color: #004085;
+}
+
+.condition-index.average {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.condition-index.poor {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+/* 総合評価 */
+.overall-rating {
+    display: inline-block;
+    width: 30px;
+    height: 30px;
+    line-height: 30px;
+    text-align: center;
+    border-radius: 50%;
+    font-weight: 700;
+    color: white;
+}
+
+.rating-s { background-color: #ff6b35; }
+.rating-a { background-color: #f7931e; }
+.rating-b { background-color: #ffd23f; color: #333; }
+.rating-c { background-color: #a8dadc; color: #333; }
+.rating-d { background-color: #6c757d; }
+
+/* AI制御ボタン */
+.ai-controls {
+    text-align: center;
+    margin-top: 2rem;
+}
+
+.ai-update-btn {
+    background: linear-gradient(135deg, var(--secondary) 0%, var(--primary) 100%);
+    border: none;
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+    border-radius: 25px;
+    transition: all 0.3s ease;
+}
+
+.ai-update-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 204, 255, 0.3);
+}
+
+.ai-status {
+    margin-top: 1rem;
+    opacity: 0.8;
+    font-size: 0.9rem;
+}
+
+/* AIエラーメッセージ */
+.ai-error-message {
+    background-color: rgba(220, 53, 69, 0.9);
+    color: white;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+    .prediction-cards {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .prediction-result {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+    
+    .ticket-suggestions {
+        gap: 0.5rem;
+    }
+    
+    .ai-analysis-table {
+        font-size: 0.85rem;
+    }
+    
+    .ai-analysis-table th,
+    .ai-analysis-table td {
+        padding: 0.5rem;
+    }
+}
