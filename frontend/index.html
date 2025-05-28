@@ -979,6 +979,116 @@
         </div>
     </section>
 
+    <!-- 既存の predictions セクションの後に追加 -->
+<section class="ai-predictions" id="ai-predictions">
+    <div class="container">
+        <h2 class="section-title">🤖 AI予想結果</h2>
+        
+        <!-- AI予想カード -->
+        <div class="prediction-cards">
+            <!-- 勝率予測カード -->
+            <div class="prediction-card win-prediction">
+                <div class="card-header">
+                    <h3><i class="fas fa-trophy"></i> 勝率予測</h3>
+                    <span class="confidence-badge">信頼度: <span id="win-confidence">--</span>%</span>
+                </div>
+                <div class="card-content">
+                    <div class="prediction-result">
+                        <div class="predicted-winner">
+                            <span class="winner-number" id="predicted-winner">-</span>
+                            <span class="winner-name" id="predicted-winner-name">予測中...</span>
+                        </div>
+                        <div class="win-probability">
+                            <span id="win-probability">--%</span>
+                            <small>勝率</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 舟券推奨カード -->
+            <div class="prediction-card ticket-recommendation">
+                <div class="card-header">
+                    <h3><i class="fas fa-ticket-alt"></i> おすすめ舟券</h3>
+                    <span class="expected-value">期待値: <span id="expected-value">--</span></span>
+                </div>
+                <div class="card-content">
+                    <div class="ticket-suggestions">
+                        <div class="ticket-type">
+                            <label>単勝</label>
+                            <span id="recommended-win">-</span>
+                        </div>
+                        <div class="ticket-type">
+                            <label>2連単</label>
+                            <span id="recommended-exacta">-→-</span>
+                        </div>
+                        <div class="ticket-type">
+                            <label>3連単</label>
+                            <span id="recommended-trifecta">-→-→-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- リスク分析カード -->
+            <div class="prediction-card risk-analysis">
+                <div class="card-header">
+                    <h3><i class="fas fa-chart-line"></i> リスク分析</h3>
+                </div>
+                <div class="card-content">
+                    <div class="risk-metrics">
+                        <div class="risk-meter">
+                            <div class="meter-label">安定性</div>
+                            <div class="meter-bar">
+                                <div class="meter-fill" id="stability-meter" style="width: 0%"></div>
+                            </div>
+                            <span id="stability-score">--%</span>
+                        </div>
+                        <div class="risk-meter">
+                            <div class="meter-label">波乱度</div>
+                            <div class="meter-bar">
+                                <div class="meter-fill risk" id="upset-meter" style="width: 0%"></div>
+                            </div>
+                            <span id="upset-score">--%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 詳細選手分析テーブル -->
+        <div class="detailed-analysis">
+            <h3>📊 詳細AI分析</h3>
+            <table class="ai-analysis-table">
+                <thead>
+                    <tr>
+                        <th>枠</th>
+                        <th>選手</th>
+                        <th>AI予想順位</th>
+                        <th>勝率予測</th>
+                        <th>調子指数</th>
+                        <th>コース適性</th>
+                        <th>総合評価</th>
+                    </tr>
+                </thead>
+                <tbody id="ai-analysis-tbody">
+                    <!-- AIデータが動的に挿入されます -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- AI予想更新ボタン -->
+        <div class="ai-controls">
+            <button class="btn btn-primary ai-update-btn" onclick="loadAIPrediction()">
+                <i class="fas fa-robot"></i> AI予想を更新
+            </button>
+            <div class="ai-status">
+                <span id="ai-last-updated">最終更新: --:--:--</span>
+            </div>
+        </div>
+    </div>
+</section>
+
     <section class="statistics" id="statistics">
         <div class="container">
             <h2 class="section-title">予想精度統計</h2>
