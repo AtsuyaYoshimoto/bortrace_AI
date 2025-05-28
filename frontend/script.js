@@ -76,10 +76,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function initApp() {
     await loadVenues(); 
-    await loadRealTimeData();  // ← 新しい関数
+    await loadRealTimeData();
+    await loadAIPrediction();  // ← この行を追加
     await updatePerformanceStats();
     setInterval(async () => {
         await loadRealTimeData();
+        await loadAIPrediction();  // ← この行を追加
     }, 5 * 60 * 1000);
 }
 
@@ -512,3 +514,226 @@ function updateTimestamp(timestamp) {
     });
     document.getElementById('last-updated').textContent = formatted;
 }
+
+// ==========================================
+// AI予想機能 - 既存script.jsの最後に追加
+// ==========================================
+
+/**
+ * AI予想データの取得と表示
+ */
+async function loadAIPrediction(raceId = null) {
+    try {
+        // レースIDが指定されていない場合は、現在選択中のレースを使用
+        if (!raceId) {
+            raceId = getCurrentRaceId(); // 現在のレースIDを取得する関数（要実装）
+        }
+
+        // AIバックエンドAPIからAI予想を取得
+        const response = await fetch(`${boatraceAPI.baseUrl}/ai/prediction/${raceId}`);
+        
+        if (!response.ok) {
+            throw new Error('AI予想データの取得に失敗しました');
+        }
+
+        const aiPrediction = await response.json();
+        
+        // AI予想結果を表示
+        displayAIPrediction(aiPrediction);
+        
+        // 詳細分析テーブルを更新
+        updateAIAnalysisTable(aiPrediction);
+        
+        // 最終更新時刻を更新
+        updateAITimestamp();
+        
+    } catch (error) {
+        console.error('AI予想取得エラー:', error);
+        showAIError(error.message);
+    }
+}
+
+/**
+ * AI予想結果の表示
+ */
+function displayAIPrediction(prediction) {
+    // 勝率予測の表示
+    const predictedWinner = prediction.forecast.win;
+    const winnerData = prediction.predictions.find(p => p.boat_number === predictedWinner);
+    
+    if (winnerData) {
+        document.getElementById('predicted-winner').textContent = winnerData.boat_number;
+        document.getElementById('predicted-winner-name').textContent = getRacerName(winnerData.racer_id);
+        document.getElementById('win-probability').textContent = 
+            `${(winnerData.rank_probabilities[0] * 100).toFixed(1)}%`;
+        document.getElementById('win-confidence').textContent = 
+            `${(winnerData.rank_probabilities[0] * 100).toFixed(0)}`;
+    }
+
+    // 舟券推奨の表示
+    document.getElementById('recommended-win').textContent = prediction.forecast.win;
+    document.getElementById('recommended-exacta').textContent = 
+        `${prediction.forecast.exacta[0]}→${prediction.forecast.exacta[1]}`;
+    document.getElementById('recommended-trifecta').textContent = 
+        `${prediction.forecast.trio[0]}→${prediction.forecast.trio[1]}→${prediction.forecast.trio[2]}`;
+
+    // 期待値の表示
+    const avgExpectedValue = prediction.predictions.reduce((sum, p) => sum + p.expected_value, 0) / prediction.predictions.length;
+    document.getElementById('expected-value').textContent = avgExpectedValue.toFixed(2);
+
+    // リスク分析の表示
+    updateRiskAnalysis(prediction);
+}
+
+/**
+ * リスク分析の更新
+ */
+function updateRiskAnalysis(prediction) {
+    // 安定性スコア計算（1着予測の信頼度に基づく）
+    const topPrediction = prediction.predictions.find(p => p.predicted_rank === 1);
+    const stabilityScore = topPrediction.rank_probabilities[0] * 100;
+    
+    // 波乱度スコア計算（予測分散度に基づく）
+    const avgProbability = prediction.predictions.reduce((sum, p) => sum + p.rank_probabilities[0], 0) / prediction.predictions.length;
+    const upsetScore = (1 - avgProbability) * 100;
+
+    // メーター表示の更新
+    document.getElementById('stability-meter').style.width = `${stabilityScore}%`;
+    document.getElementById('stability-score').textContent = `${stabilityScore.toFixed(0)}%`;
+    
+    document.getElementById('upset-meter').style.width = `${upsetScore}%`;
+    document.getElementById('upset-score').textContent = `${upsetScore.toFixed(0)}%`;
+}
+
+/**
+ * AI分析テーブルの更新
+ */
+function updateAIAnalysisTable(prediction) {
+    const tbody = document.getElementById('ai-analysis-tbody');
+    tbody.innerHTML = '';
+
+    // 予測順位でソート
+    const sortedPredictions = [...prediction.predictions].sort((a, b) => a.predicted_rank - b.predicted_rank);
+
+    sortedPredictions.forEach(racer => {
+        const row = document.createElement('tr');
+        
+        // 調子指数計算（サンプル実装）
+        const conditionIndex = calculateConditionIndex(racer);
+        
+        // コース適性スコア計算（サンプル実装）
+        const courseAptitude = calculateCourseAptitude(racer);
+        
+        // 総合評価計算
+        const overallRating = calculateOverallRating(racer);
+
+        row.innerHTML = `
+            <td><span class="player-number">${racer.boat_number}</span></td>
+            <td class="player-name">${getRacerName(racer.racer_id)}</td>
+            <td class="ai-rank rank-${racer.predicted_rank}">${racer.predicted_rank}</td>
+            <td class="win-prob">${(racer.rank_probabilities[0] * 100).toFixed(1)}%</td>
+            <td class="condition-index ${getConditionClass(conditionIndex)}">${conditionIndex.toFixed(1)}</td>
+            <td class="course-aptitude">${courseAptitude.toFixed(1)}</td>
+            <td class="overall-rating ${getRatingClass(overallRating)}">${overallRating}</td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+}
+
+/**
+ * 選手の調子指数を計算（サンプル実装）
+ */
+function calculateConditionIndex(racer) {
+    // 実際はAIモデルから取得した詳細データを使用
+    return 70 + Math.random() * 30; // 70-100の範囲でランダム（サンプル）
+}
+
+/**
+ * コース適性スコアを計算（サンプル実装）
+ */
+function calculateCourseAptitude(racer) {
+    // 実際はコース別成績データから算出
+    return 60 + Math.random() * 40; // 60-100の範囲でランダム（サンプル）
+}
+
+/**
+ * 総合評価を計算
+ */
+function calculateOverallRating(racer) {
+    const winProb = racer.rank_probabilities[0];
+    if (winProb > 0.4) return 'S';
+    if (winProb > 0.3) return 'A';
+    if (winProb > 0.2) return 'B';
+    if (winProb > 0.1) return 'C';
+    return 'D';
+}
+
+/**
+ * 調子指数に応じたCSSクラスを取得
+ */
+function getConditionClass(index) {
+    if (index >= 85) return 'excellent';
+    if (index >= 75) return 'good';
+    if (index >= 65) return 'average';
+    return 'poor';
+}
+
+/**
+ * 総合評価に応じたCSSクラスを取得
+ */
+function getRatingClass(rating) {
+    return `rating-${rating.toLowerCase()}`;
+}
+
+/**
+ * 選手名を取得（サンプル実装）
+ */
+function getRacerName(racerId) {
+    // 実際は選手データから取得
+    const names = ['山田太郎', '鈴木一郎', '佐藤次郎', '田中三郎', '高橋四郎', '伊藤五郎'];
+    return names[racerId % names.length] || '選手名不明';
+}
+
+/**
+ * 現在のレースIDを取得（サンプル実装）
+ */
+function getCurrentRaceId() {
+    // 実際は現在選択中のレースから取得
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    return `${today}0101`; // 桐生1Rのサンプル
+}
+
+/**
+ * AI予想タイムスタンプの更新
+ */
+function updateAITimestamp() {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('ja-JP');
+    document.getElementById('ai-last-updated').textContent = `最終更新: ${timeString}`;
+}
+
+/**
+ * AIエラーの表示
+ */
+function showAIError(message) {
+    // エラー表示の実装
+    console.error('AI予想エラー:', message);
+    
+    // UIにエラー表示
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'ai-error-message';
+    errorDiv.innerHTML = `
+        <i class="fas fa-exclamation-triangle"></i>
+        AI予想の取得に失敗しました: ${message}
+    `;
+    
+    const container = document.querySelector('.ai-predictions .container');
+    container.insertBefore(errorDiv, container.firstChild);
+    
+    // 5秒後にエラーメッセージを自動削除
+    setTimeout(() => {
+        errorDiv.remove();
+    }, 5000);
+}
+
