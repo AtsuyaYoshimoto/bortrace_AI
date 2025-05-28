@@ -515,9 +515,22 @@ function updateTimestamp(timestamp) {
     document.getElementById('last-updated').textContent = formatted;
 }
 
-// ==========================================
-// AI予想機能 - 既存script.jsの最後に追加
-// ==========================================
+// モックデータ生成関数（loadAIPrediction関数の前に追加）
+function generateMockAIPrediction() {
+    return {
+        race_id: "20250528_01_01",
+        forecast: {
+            win: 1,
+            exacta: [1, 3],
+            trio: [1, 3, 2]
+        },
+        predictions: [
+            { boat_number: 1, racer_id: 10001, predicted_rank: 1, rank_probabilities: [0.45, 0.25, 0.15, 0.10, 0.03, 0.02], expected_value: 1.85 },
+            { boat_number: 2, racer_id: 10002, predicted_rank: 4, rank_probabilities: [0.15, 0.20, 0.25, 0.25, 0.10, 0.05], expected_value: 3.65 },
+            { boat_number: 3, racer_id: 10003, predicted_rank: 2, rank_probabilities: [0.25, 0.30, 0.20, 0.15, 0.08, 0.02], expected_value: 2.50 }
+        ]
+    };
+}
 
 /**
  * AI予想データの取得と表示
