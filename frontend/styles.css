@@ -824,7 +824,7 @@ footer {
 /* 予想カードレイアウト */
 .prediction-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); /* 300px→320pxに変更 */
     gap: 2rem;
     margin-bottom: 3rem;
 }
@@ -1161,4 +1161,25 @@ footer {
     .ai-analysis-table td {
         padding: 0.5rem;
     }
+}
+
+/* AI HEROセクション */
+.ai-hero {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding: 2rem;
+    background: rgba(255,255,255,0.1);
+    border-radius: 15px;
+}
+
+.ai-brain-animation {
+    font-size: 4rem;
+    color: #fff;
+    animation: pulse 2s infinite;
+    margin-bottom: 1rem;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.8; }
+    50% { transform: scale(1.1); opacity: 1; }
 }
