@@ -35,12 +35,26 @@ def get_today_races():
     ]
     return jsonify(races)
 
-# 既存のエンドポイント（残す）
 @app.route('/api/prediction/<race_id>', methods=['GET', 'POST'])
 def get_race_prediction(race_id):
-    # モックデータを返す
-    prediction = {
-        "race_id": race_id,
+    try:
+        ai = initialize_ai()
+        prediction = ai.get_race_prediction(race_id)
+        
+        if prediction:
+            return jsonify(prediction)
+        else:
+            # AI予想が取得できない場合はモックデータ
+            return jsonify(get_mock_prediction(race_id))
+            
+    except Exception as e:
+        print(f"AI予想エラー: {str(e)}")
+        return jsonify(get_mock_prediction(race_id))
+
+def get_mock_prediction(race_id):
+    # 既存のモックデータをここに移動
+    return {
+         "race_id": race_id,
         "predictions": [
             {"racer_id": 1, "boat_number": 1, "predicted_rank": 1, "rank_probabilities": [0.8, 0.1, 0.05, 0.03, 0.01, 0.01], "expected_value": 1.2},
             {"racer_id": 2, "boat_number": 2, "predicted_rank": 3, "rank_probabilities": [0.1, 0.2, 0.4, 0.2, 0.08, 0.02], "expected_value": 2.8},
@@ -56,7 +70,6 @@ def get_race_prediction(race_id):
             "trio": [1, 3, 2]
         }
     }
-    return jsonify(prediction)
 
 # 既存のエンドポイント（残す）
 @app.route('/api/stats', methods=['GET'])
