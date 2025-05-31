@@ -509,10 +509,6 @@ def set_cached_data(cache_key, data):
     with cache_lock:
         cache_data[cache_key] = (data, datetime.now())
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(debug=False, host='0.0.0.0', port=port)
-
 @app.route('/api/race-features/<race_id>', methods=['GET'])
 def get_race_features(race_id):
     try:
@@ -521,3 +517,7 @@ def get_race_features(race_id):
         return jsonify(features)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=False, host='0.0.0.0', port=port)
