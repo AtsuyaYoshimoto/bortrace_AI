@@ -195,6 +195,31 @@ async function displayRacePrediction(raceId) {
     }
 }
 
+function updateRaceInfo(prediction) {
+    // レースヘッダーの更新
+    const raceHeader = document.querySelector('.race-header h3');
+    if (raceHeader) {
+        raceHeader.textContent = `桐生競艇 第1レース`;
+    }
+    
+    // レース日時の更新
+    const raceDate = document.querySelector('.race-header span');
+    if (raceDate) {
+        const now = new Date();
+        const formattedDate = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
+        raceDate.textContent = formattedDate;
+    }
+    
+    // 詳細情報の更新
+    const detailBoxes = document.querySelectorAll('.race-details .detail-box');
+    if (detailBoxes.length >= 4) {
+        detailBoxes[0].innerHTML = `<i class="fas fa-map-marker-alt"></i> 桐生競艇場`;
+        detailBoxes[1].innerHTML = `<i class="fas fa-trophy"></i> レース番号: 1R`;
+        detailBoxes[2].innerHTML = `<i class="fas fa-clock"></i> 最終更新: ${new Date().toLocaleTimeString('ja-JP')}`;
+        detailBoxes[3].innerHTML = `<i class="fas fa-database"></i> 予測データ取得成功`;
+    }
+}
+
 function updateRaceInfoFromReal(data) {
     // レースヘッダーの更新
     const raceHeader = document.querySelector('.race-header h3');
