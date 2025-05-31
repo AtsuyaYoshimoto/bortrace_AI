@@ -539,22 +539,44 @@ function generateMockAIPrediction() {
 // 既存のloadAIPrediction関数を以下に置き換え
 async function loadAIPrediction() {
     try {
-        console.log('AI予想機能は準備中です');
+        console.log('AI予想データ取得開始...');
         
+        // 固定のレースID（後で動的に変更可能）
+        const raceId = "202505251201";
+        
+        const response = await fetch(`${boatraceAPI.baseUrl}/prediction/${raceId}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP Error: ${response.status}`);
+        }
+        
+        const prediction = await response.json();
+        
+        // AI予想セクションを表示
         const aiSection = document.getElementById('ai-predictions');
         if (aiSection) {
             aiSection.style.display = 'block';
         }
         
-        document.getElementById('predicted-winner').textContent = '1';
-        document.getElementById('predicted-winner-name').textContent = '福来 友一';
-        document.getElementById('win-probability').textContent = '45%';
-        document.getElementById('win-confidence').textContent = '85';
+        // 予測結果を表示
+        if (prediction.predictions && prediction.predictions.length > 0) {
+            const topPrediction = prediction.predictions[0];
+            
+            document.getElementById('predicted-winner').textContent = topPrediction.boat_number;
+            document.getElementById('predicted-winner-name').textContent = `選手${topPrediction.boat_number}`;
+            document.getElementById('win-probability').textContent = `${Math.round(topPrediction.rank_probabilities[0] * 100)}%`;
+            document.getElementById('win-confidence').textContent = '85';
+        }
         
         updateAITimestamp();
+        console.log('AI予想データ取得完了');
         
     } catch (error) {
-        console.log('AI予想は現在準備中です');
+        console.error('AI予想エラー:', error);
+        // エラー時はモックデータ表示
+        document.getElementById('predicted-winner').textContent = '1';
+        document.getElementById('predicted-winner-name').textContent = '予測中...';
+        document.getElementById('win-probability').textContent = '-%';
     }
 }
 
