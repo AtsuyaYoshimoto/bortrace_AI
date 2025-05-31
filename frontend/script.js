@@ -580,3 +580,11 @@ async function loadAIPrediction() {
     }
 }
 
+function updateAITimestamp() {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('ja-JP');
+    const timestampElement = document.getElementById('ai-last-updated');
+    if (timestampElement) {
+        timestampElement.textContent = `最終更新: ${timeString}`;
+    }
+}
