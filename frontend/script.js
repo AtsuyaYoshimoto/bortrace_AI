@@ -154,7 +154,12 @@ async function loadRealTimeData() {
             throw new Error('選手データが見つかりません');
         }
 
+            // タイムスタンプ更新（エラーハンドリング付き）
+    if (data.timestamp) {
         updateTimestamp(data.timestamp);
+    } else {
+        console.warn('タイムスタンプデータがありません');
+    }
 
     } catch (err) {
         console.error('データ取得エラー:', err);
@@ -495,7 +500,6 @@ function displayRealRacers(racers) {
     });
 }
 
-// タイムスタンプ更新（追加が必要）
 function updateTimestamp(timestamp) {
     const date = new Date(timestamp);
     const formatted = date.toLocaleString('ja-JP', {
@@ -506,7 +510,19 @@ function updateTimestamp(timestamp) {
         minute: '2-digit',
         second: '2-digit'
     });
-    document.getElementById('last-updated').textContent = formatted;
+    
+    // 要素の存在チェックを追加
+    const lastUpdatedElement = document.getElementById('last-updated');
+    if (lastUpdatedElement) {
+        lastUpdatedElement.textContent = formatted;
+    } else {
+        console.warn('last-updated要素が見つかりません');
+        // 代替として、他の場所に時刻を表示
+        const raceDate = document.querySelector('.race-header span');
+        if (raceDate) {
+            raceDate.textContent = `最終更新: ${formatted}`;
+        }
+    }
 }
 
 // モックデータ生成関数（loadAIPrediction関数の前に追加）
@@ -584,5 +600,7 @@ function updateAITimestamp() {
     const timestampElement = document.getElementById('ai-last-updated');
     if (timestampElement) {
         timestampElement.textContent = `最終更新: ${timeString}`;
+    } else {
+        console.warn('ai-last-updated要素が見つかりません');
     }
 }
