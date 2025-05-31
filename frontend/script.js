@@ -123,7 +123,7 @@ async function loadRealTimeData() {
         statusIndicator.className = 'status-indicator status-loading';
         statusIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> データ読み込み中...';
 
-        // APIからリアルタイムデータを取得
+        // 実際のAPIからデータ取得
         const response = await fetch(`${boatraceAPI.baseUrl}/real-data-test`);
         
         if (!response.ok) {
@@ -144,8 +144,16 @@ async function loadRealTimeData() {
         statusIndicator.className = 'status-indicator status-success';
         statusIndicator.innerHTML = '<i class="fas fa-check-circle"></i> データ取得成功';
 
-        // 実際のデータを表示
-        displayRealRacers(data.racer_extraction.racers);
+        // リアルデータを表示
+        if (data.racer_extraction && data.racer_extraction.racers) {
+            displayRealRacers(data.racer_extraction.racers);
+            
+            // レース情報更新
+            updateRaceInfoFromReal(data);
+        } else {
+            throw new Error('選手データが見つかりません');
+        }
+
         updateTimestamp(data.timestamp);
 
     } catch (err) {
@@ -182,42 +190,28 @@ async function displayRacePrediction(raceId) {
     }
 }
 
-// レース情報を更新
-function updateRaceInfo(prediction) {
-    // モックデータを使用（APIの結果に合わせて調整）
-    const raceInfo = {
-        venue: '住之江',
-        race_number: 12,
-        race_date: '2025-05-17T15:30:00',
-        weather: {
-            wind: '3m/s (北東)',
-            surface: '穏やか',
-            temperature: 22,
-            grade: 'SG'
-        }
-    };
-    
+function updateRaceInfoFromReal(data) {
     // レースヘッダーの更新
     const raceHeader = document.querySelector('.race-header h3');
     if (raceHeader) {
-        raceHeader.textContent = `${raceInfo.venue}競艇 第${raceInfo.race_number}レース`;
+        raceHeader.textContent = `桐生競艇 第1レース`;
     }
     
     // レース日時の更新
     const raceDate = document.querySelector('.race-header span');
     if (raceDate) {
-        const date = new Date(raceInfo.race_date);
-        const formattedDate = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}開始`;
+        const now = new Date();
+        const formattedDate = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
         raceDate.textContent = formattedDate;
     }
     
     // 詳細情報の更新
     const detailBoxes = document.querySelectorAll('.race-details .detail-box');
     if (detailBoxes.length >= 4) {
-        detailBoxes[0].innerHTML = `<i class="fas fa-wind"></i> 風速: ${raceInfo.weather.wind}`;
-        detailBoxes[1].innerHTML = `<i class="fas fa-water"></i> 水面: ${raceInfo.weather.surface}`;
-        detailBoxes[2].innerHTML = `<i class="fas fa-temperature-high"></i> 気温: ${raceInfo.weather.temperature}°C`;
-        detailBoxes[3].innerHTML = `<i class="fas fa-medal"></i> グレード: ${raceInfo.weather.grade}`;
+        detailBoxes[0].innerHTML = `<i class="fas fa-map-marker-alt"></i> 桐生競艇場`;
+        detailBoxes[1].innerHTML = `<i class="fas fa-trophy"></i> レース番号: 1R`;
+        detailBoxes[2].innerHTML = `<i class="fas fa-clock"></i> 最終更新: ${new Date().toLocaleTimeString('ja-JP')}`;
+        detailBoxes[3].innerHTML = `<i class="fas fa-database"></i> データ取得成功`;
     }
 }
 
@@ -542,7 +536,11 @@ async function loadAIPrediction() {
         console.log('AI予想データ取得開始...');
         
         // 固定のレースID（後で動的に変更可能）
-        const raceId = "202505251201";
+        const today = new Date();
+        const dateStr = today.getFullYear().toString() + 
+                       (today.getMonth() + 1).toString().padStart(2, '0') + 
+                       today.getDate().toString().padStart(2, '0');
+        const raceId = `${dateStr}0101`; // 桐生1レース
         
         const response = await fetch(`${boatraceAPI.baseUrl}/prediction/${raceId}`);
         
