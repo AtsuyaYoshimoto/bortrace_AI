@@ -397,21 +397,7 @@ function initEventListeners() {
         });
     }
 
-    const venueSelect = document.getElementById('venueSelect');
-    const refreshBtn = document.getElementById('refreshBtn');
-    
-    venueSelect.addEventListener('change', function() {
-        if (this.value) {
-            loadVenueData(this.value);
-        }
-    });
-    
-    refreshBtn.addEventListener('click', function() {
-        const selectedVenue = venueSelect.value;
-        if (selectedVenue) {
-            loadVenueData(selectedVenue);
-        }
-    });
+
     
     // ナビゲーションリンク（スムーズスクロール）
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
@@ -431,62 +417,101 @@ function initEventListeners() {
     });
 }
 
-// 会場一覧を読み込む
+// グローバル変数追加
+let selectedVenue = null;
+let selectedRace = null;
+
+// 既存のloadVenues関数を置き換え
 async function loadVenues() {
     try {
         const venues = await boatraceAPI.getVenues();
-        const venueSelect = document.getElementById('venueSelect');
+        const venueGrid = document.getElementById('venue-grid');
+        
+        venueGrid.innerHTML = '';
         
         for (const [code, venueData] of Object.entries(venues)) {
-            const option = document.createElement('option');
-            option.value = code;
-            option.textContent = `${venueData.name}（${venueData.location}）`;
-            venueSelect.appendChild(option);
+            const venueCard = document.createElement('div');
+            venueCard.className = 'venue-card';
+            venueCard.textContent = venueData.name;
+            venueCard.onclick = () => selectVenue(code, venueData.name);
+            venueGrid.appendChild(venueCard);
         }
     } catch (error) {
         console.error('会場一覧取得エラー:', error);
     }
 }
 
-// 選択した会場のデータを取得
-async function loadVenueData(venueCode) {
-    try {
-        const response = await fetch(`${boatraceAPI.baseUrl}/kyotei/${venueCode}`);
-        const data = await response.json();
-        
-        if (data.racer_extraction && data.racer_extraction.racers) {
-            updateRaceDataTable(data);
-        }
-    } catch (error) {
-        console.error('会場データ取得エラー:', error);
+// 新しい関数追加
+function selectVenue(venueCode, venueName) {
+    selectedVenue = venueCode;
+    
+    // 選択状態の更新
+    document.querySelectorAll('.venue-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    event.target.classList.add('selected');
+    
+    // レース選択表示
+    showRaceSelector();
+    
+    // 情報表示更新
+    document.getElementById('selected-venue-name').textContent = venueName;
+    document.getElementById('selected-race-info').textContent = '';
+}
+
+function showRaceSelector() {
+    const raceSelector = document.getElementById('race-selector');
+    const raceButtons = document.getElementById('race-buttons');
+    
+    raceSelector.style.display = 'block';
+    raceButtons.innerHTML = '';
+    
+    // 1R〜12Rのボタン作成
+    for (let i = 1; i <= 12; i++) {
+        const raceBtn = document.createElement('button');
+        raceBtn.className = 'race-btn';
+        raceBtn.textContent = `${i}R`;
+        raceBtn.onclick = () => selectRace(i);
+        raceButtons.appendChild(raceBtn);
     }
 }
 
-// 実際のレースデータでテーブルを更新
-function updateRaceDataTable(data) {
-    const tbody = document.querySelector('.prediction-table tbody');
-    if (!tbody) return;
+function selectRace(raceNumber) {
+    selectedRace = raceNumber;
     
-    tbody.innerHTML = '';
-    
-    data.racer_extraction.racers.forEach(racer => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td><span class="player-number">${racer.boat_number}</span></td>
-            <td class="player-name">${racer.name}</td>
-            <td>${racer.class}</td>
-            <td>${racer.age}歳</td>
-            <td class="prediction-score">-</td>
-            <td>${racer.weight}</td>
-            <td>${racer.region}/${racer.branch}</td>
-        `;
-        tbody.appendChild(row);
+    // 選択状態の更新
+    document.querySelectorAll('.race-btn').forEach(btn => {
+        btn.classList.remove('selected');
     });
+    event.target.classList.add('selected');
     
-    // 会場名を更新
+    // データ取得
+    loadSelectedRaceData();
+    
+    // 情報表示更新
+    document.getElementById('selected-race-info').textContent = ` - 第${raceNumber}レース`;
+}
+
+async function loadSelectedRaceData() {
+    if (!selectedVenue || !selectedRace) return;
+    
+    try {
+        const response = await fetch(`${boatraceAPI.baseUrl}/race-data?venue=${selectedVenue}&race=${selectedRace}`);
+        const data = await response.json();
+        
+        if (data.racer_extraction && data.racer_extraction.racers) {
+            displayRealRacers(data.racer_extraction.racers);
+            updateRaceInfoFromSelected(data);
+        }
+    } catch (error) {
+        console.error('レースデータ取得エラー:', error);
+    }
+}
+
+function updateRaceInfoFromSelected(data) {
     const raceHeader = document.querySelector('.race-header h3');
     if (raceHeader) {
-        raceHeader.textContent = `${data.venue_name}競艇 第1レース`;
+        raceHeader.textContent = `${data.race_info.venue_name} 第${data.race_info.race_number}レース`;
     }
 }
 
