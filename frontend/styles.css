@@ -248,46 +248,78 @@ nav a:hover {
     overflow: hidden;
 }
 
-.venue-selector {
+/* 会場・レース選択UI */
+.venue-race-selector {
     padding: 1.5rem;
     background-color: #f8f9fa;
     border-bottom: 1px solid #e0e0e0;
+}
+
+.venue-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.venue-card {
+    padding: 0.8rem;
+    background: white;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    min-height: 60px;
     display: flex;
     align-items: center;
-    gap: 1rem;
-    flex-wrap: wrap;
+    justify-content: center;
 }
 
-.venue-selector label {
-    font-weight: 600;
-    color: var(--dark);
-    min-width: 120px;
-}
-
-.venue-selector select {
-    padding: 0.5rem 1rem;
-    border: 2px solid #ddd;
-    border-radius: 4px;
-    font-size: 1rem;
-    min-width: 200px;
-    flex: 1;
-}
-
-.venue-selector select:focus {
+.venue-card:hover {
     border-color: var(--primary);
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+    background-color: #f0f5ff;
 }
 
-@media (max-width: 768px) {
-    .venue-selector {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    
-    .venue-selector select {
-        min-width: 100%;
-    }
+.venue-card.selected {
+    border-color: var(--primary);
+    background-color: var(--primary);
+    color: white;
+}
+
+.race-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.race-btn {
+    padding: 0.5rem 1rem;
+    background: white;
+    border: 2px solid #ddd;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.race-btn:hover {
+    border-color: var(--primary);
+    background-color: #f0f5ff;
+}
+
+.race-btn.selected {
+    border-color: var(--primary);
+    background-color: var(--primary);
+    color: white;
+}
+
+.selected-info {
+    padding: 1rem;
+    background: var(--primary);
+    color: white;
+    border-radius: 6px;
+    font-weight: 600;
 }
 
 .race-header {
