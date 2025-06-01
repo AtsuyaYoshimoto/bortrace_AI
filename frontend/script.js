@@ -572,6 +572,36 @@ function updateTimestamp(timestamp) {
         second: '2-digit'
     });
     
+    // 複数の要素を試行（確実に更新）
+    const possibleElements = [
+        'last-updated',
+        'selected-race-info', 
+        'ai-last-updated'
+    ];
+    
+    let updated = false;
+    
+    for (const elementId of possibleElements) {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.textContent = `最終更新: ${formatted}`;
+            updated = true;
+            break;
+        }
+    }
+    
+    // どの要素も見つからない場合は新しく作成
+    if (!updated) {
+        const detailBoxes = document.querySelector('.race-details');
+        if (detailBoxes) {
+            const timeBox = document.createElement('div');
+            timeBox.className = 'detail-box';
+            timeBox.innerHTML = `<i class="fas fa-clock"></i> 最終更新: ${formatted}`;
+            detailBoxes.appendChild(timeBox);
+        }
+    }
+}
+    
     // 要素の存在チェックを追加
     const lastUpdatedElement = document.getElementById('last-updated');
     if (lastUpdatedElement) {
