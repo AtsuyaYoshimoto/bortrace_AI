@@ -269,22 +269,20 @@
             align-items: center;
         }
 
-        .race-details {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 1rem;
-            padding: 1.5rem;
-        }
-
-        .detail-box {
-            background-color: #f5f7fa;
-            padding: 0.8rem;
-            border-radius: 4px;
-            border-left: 4px solid var(--primary);
-            font-weight: 500;
-            flex: 1;
-            min-width: 150px;
-        }
+            <div class="race-details">
+                <div class="detail-box">
+                    <i class="fas fa-map-marker-alt"></i> <span id="venue-name">競艇場選択</span>
+                </div>
+                <div class="detail-box">
+                    <i class="fas fa-trophy"></i> レース番号: <span id="race-number">-R</span>
+                </div>
+                <div class="detail-box">
+                    <i class="fas fa-clock"></i> 最終更新: <span id="last-updated">--:--:--</span>
+                </div>
+                <div class="detail-box">
+                    <i class="fas fa-database"></i> データ取得成功
+                </div>
+            </div>
 
         /* データ状況表示 */
         .data-status {
