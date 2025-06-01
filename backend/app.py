@@ -549,6 +549,20 @@ def ai_status():
         "status": "ok"
     })
 
+@app.route('/api/ai-debug')
+def ai_debug():
+    import traceback
+    try:
+        from boat_race_prediction_system import BoatracePredictor
+        model = BoatracePredictor()
+        return jsonify({"status": "success", "message": "AI model loaded"})
+    except Exception as e:
+        return jsonify({
+            "status": "failed",
+            "error": str(e),
+            "traceback": traceback.format_exc().split('\n')
+        })
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
