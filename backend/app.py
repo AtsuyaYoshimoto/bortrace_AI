@@ -552,8 +552,8 @@ def ai_status():
 def ai_debug():
     import traceback
     try:
-        from boat_race_prediction_system import BoatracePredictor
-        model = BoatracePredictor()
+        from boat_race_prediction_system import BoatraceAI
+        model = BoatraceAI()
         return jsonify({"status": "success", "message": "AI model loaded"})
     except Exception as e:
         return jsonify({
