@@ -614,7 +614,6 @@ function updateTimestamp(timestamp) {
             raceDate.textContent = `最終更新: ${formatted}`;
         }
     }
-}
 
 // モックデータ生成関数（loadAIPrediction関数の前に追加）
 function generateMockAIPrediction() {
