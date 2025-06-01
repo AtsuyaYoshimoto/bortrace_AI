@@ -9,6 +9,18 @@ import random
 import re
 import threading
 from datetime import datetime, timedelta
+# AIモデルのインポート
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
+
+try:
+    from boat_race_prediction_system import BoatracePredictor
+    ai_model = BoatracePredictor()
+    AI_AVAILABLE = True
+except ImportError as e:
+    print(f"AI model import failed: {e}")
+    AI_AVAILABLE = False
 
 app = Flask(__name__)
 
