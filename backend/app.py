@@ -530,6 +530,19 @@ def get_race_features(race_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/ai-predict', methods=['POST'])
+def ai_predict():
+    if not AI_AVAILABLE:
+        return jsonify({"error": "AI model not available"}), 503
+    
+    data = request.get_json()
+    try:
+        prediction = ai_model.predict(data['racers'])
+        return jsonify({"prediction": prediction})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+    
