@@ -50,15 +50,12 @@ def get_today_races():
 @app.route('/api/prediction/<race_id>', methods=['GET', 'POST'])
 def get_race_prediction(race_id):
     try:
-        ai = initialize_ai()
-        prediction = ai.get_race_prediction(race_id)
-        
-        if prediction:
-            return jsonify(prediction)
-        else:
-            # AI予想が取得できない場合はモックデータ
+        if not AI_AVAILABLE:
             return jsonify(get_mock_prediction(race_id))
             
+        prediction = ai_model.get_race_prediction(race_id)
+        return jsonify(prediction)
+        
     except Exception as e:
         print(f"AI予想エラー: {str(e)}")
         return jsonify(get_mock_prediction(race_id))
@@ -524,8 +521,10 @@ def set_cached_data(cache_key, data):
 @app.route('/api/race-features/<race_id>', methods=['GET'])
 def get_race_features(race_id):
     try:
-        ai = initialize_ai()
-        features = ai.feature_extractor.get_race_features(race_id)
+        if not AI_AVAILABLE:
+            return jsonify({"error": "AI model not available"}), 503
+            
+        features = ai_model.feature_extractor.get_race_features(race_id)
         return jsonify(features)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
