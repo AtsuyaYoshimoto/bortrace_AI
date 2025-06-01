@@ -513,8 +513,19 @@ function updateRaceInfoFromSelected(data) {
     if (raceHeader) {
         raceHeader.textContent = `${data.race_info.venue_name} 第${data.race_info.race_number}レース`;
     }
+    
+    // 詳細情報も更新
+    const venueNameElement = document.getElementById('venue-name');
+    const raceNumberElement = document.getElementById('race-number');
+    
+    if (venueNameElement) {
+        venueNameElement.textContent = data.race_info.venue_name;
+    }
+    
+    if (raceNumberElement) {
+        raceNumberElement.textContent = `${data.race_info.race_number}R`;
+    }
 }
-
 // 実際の選手データを表示（追加が必要）
 function displayRealRacers(racers) {
     const tbody = document.getElementById('racers-tbody');
