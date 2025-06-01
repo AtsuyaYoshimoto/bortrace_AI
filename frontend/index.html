@@ -918,13 +918,23 @@
 
             <!-- Race Info -->
             <div id="race-info" class="race-info" style="display: none;">
-                <!-- 会場選択セクション -->
-                <div class="venue-selector">
-                    <label for="venueSelect">競艇場を選択:</label>
-                    <select id="venueSelect">
-                        <option value="">選択してください</option>
-                    </select>
-                    <button id="refreshBtn" class="btn btn-primary">更新</button>
+                <!-- 会場選択UI（カード型） -->
+                <div class="venue-race-selector">
+                    <div class="venue-grid" id="venue-grid">
+                        <!-- 競技場カードが動的に挿入される -->
+                    </div>
+                    
+                    <div class="race-selector" id="race-selector" style="display: none;">
+                        <h4>レース選択</h4>
+                        <div class="race-buttons" id="race-buttons">
+                            <!-- レースボタンが動的に挿入される -->
+                        </div>
+                    </div>
+                    
+                    <div class="selected-info" id="selected-info">
+                        <span id="selected-venue-name">会場を選択してください</span>
+                        <span id="selected-race-info"></span>
+                    </div>
                 </div>
                 
                 <div class="race-header">
