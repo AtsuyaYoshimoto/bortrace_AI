@@ -15,8 +15,8 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
 
 try:
-    from boat_race_prediction_system import BoatracePredictor
-    ai_model = BoatracePredictor()
+    from boat_race_prediction_system import BoatraceAI
+    ai_model = BoatraceAI()
     AI_AVAILABLE = True
 except ImportError as e:
     print(f"AI model import failed: {e}")
