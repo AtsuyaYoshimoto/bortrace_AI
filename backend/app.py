@@ -15,8 +15,8 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
 
 try:
-    from boat_race_prediction_system import BoatraceAI
-    ai_model = BoatraceAI()
+    from boat_race_prediction_system import BoatRaceAI
+    ai_model = BoatRaceAI()
     AI_AVAILABLE = True
 except ImportError as e:
     print(f"AI model import failed: {e}")
@@ -552,8 +552,8 @@ def ai_status():
 def ai_debug():
     import traceback
     try:
-        from boat_race_prediction_system import BoatraceAI
-        model = BoatraceAI()
+        from boat_race_prediction_system import BoatRaceAI
+        model = BoatRaceAI()
         return jsonify({"status": "success", "message": "AI model loaded"})
     except Exception as e:
         return jsonify({
