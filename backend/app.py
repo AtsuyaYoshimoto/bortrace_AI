@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, make_response
 import os
 import requests
 from bs4 import BeautifulSoup
@@ -23,14 +23,6 @@ except ImportError as e:
     AI_AVAILABLE = False
 
 app = Flask(__name__)
-
-# CORSの設定
-@app.after_request
-def add_cors_headers(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-    return response
 
 @app.route('/')
 def index():
@@ -578,6 +570,29 @@ def ai_prediction_simple_options():
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
     return response
+
+@app.route('/api/ai-prediction-simple', methods=['POST'])
+def ai_prediction_simple():
+    if not AI_AVAILABLE:
+        return jsonify({"error": "AI model not available"}), 503
+    
+    data = request.get_json()
+    try:
+        # モック予想を返す
+        return jsonify({
+            "ai_predictions": {
+                "predictions": [
+                    {"boat_number": 1, "predicted_rank": 1, "normalized_probability": 0.35}
+                ],
+                "recommendations": {
+                    "win": {"boat_number": 1},
+                    "exacta": {"combination": [1, 3]},
+                    "trio": {"combination": [1, 3, 2]}
+                }
+            }
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
