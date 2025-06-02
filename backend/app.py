@@ -561,6 +561,23 @@ def ai_debug():
             "error": str(e),
             "traceback": traceback.format_exc().split('\n')
         })
+        
+@app.after_request
+def add_cors_headers(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'false')  # 追加
+    return response
+
+# OPTIONSリクエスト対応も追加
+@app.route('/api/ai-prediction-simple', methods=['OPTIONS'])
+def ai_prediction_simple_options():
+    response = make_response()
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    return response
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
