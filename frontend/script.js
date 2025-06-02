@@ -397,8 +397,6 @@ function initEventListeners() {
         });
     }
 
-
-    
     // ナビゲーションリンク（スムーズスクロール）
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', function(e) {
@@ -414,6 +412,19 @@ function initEventListeners() {
                 });
             }
         });
+    });
+
+    const aiUpdateBtn = document.querySelector('.ai-update-btn');
+    if (aiUpdateBtn) {
+        aiUpdateBtn.addEventListener('click', updateAIPrediction);
+    }
+    
+    // AI予想を更新ボタンの代替セレクター
+    const aiButtons = document.querySelectorAll('button');
+    aiButtons.forEach(btn => {
+        if (btn.textContent.includes('AI予想') || btn.textContent.includes('🤖')) {
+            btn.addEventListener('click', updateAIPrediction);
+        }
     });
 }
 
@@ -692,5 +703,114 @@ function updateAITimestamp() {
         timestampElement.textContent = `最終更新: ${timeString}`;
     } else {
         console.warn('ai-last-updated要素が見つかりません');
+    }
+}
+
+ * AI予想を更新する関数
+ */
+async function updateAIPrediction() {
+    try {
+        console.log('AI予想更新開始...');
+        
+        // 現在表示中の選手データを取得
+        const currentRacers = getCurrentRacersData();
+        
+        if (!currentRacers || currentRacers.length === 0) {
+            alert('選手データが読み込まれていません');
+            return;
+        }
+        
+        // AI予想API呼び出し
+        const response = await fetch(`${boatraceAPI.baseUrl}/ai-prediction-simple`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                racers: currentRacers
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`AI予想API エラー: ${response.status}`);
+        }
+        
+        const aiResult = await response.json();
+        
+        // AI予想結果を画面に表示
+        displayAIPredictionResult(aiResult);
+        
+        alert('🤖 AI予想が更新されました！');
+        
+    } catch (error) {
+        console.error('AI予想エラー:', error);
+        alert(`AI予想の更新に失敗しました: ${error.message}`);
+    }
+}
+
+/**
+ * 現在表示中の選手データを取得
+ */
+function getCurrentRacersData() {
+    const racerRows = document.querySelectorAll('#racers-tbody tr');
+    const racers = [];
+    
+    racerRows.forEach((row, index) => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 8) {
+            const racer = {
+                boat_number: parseInt(cells[0].textContent.trim()),
+                name: cells[1].textContent.trim(),
+                class: cells[2].textContent.trim(),
+                age: parseInt(cells[3].textContent.replace('歳', '')),
+                weight: cells[4].textContent.trim(),
+                region: cells[5].textContent.trim(),
+                branch: cells[6].textContent.trim(),
+                registration_number: cells[7].textContent.replace('#', '').trim()
+            };
+            racers.push(racer);
+        }
+    });
+    
+    return racers;
+}
+
+/**
+ * AI予想結果を表示
+ */
+function displayAIPredictionResult(aiResult) {
+    console.log('AI予想結果:', aiResult);
+    
+    if (aiResult.ai_predictions && aiResult.ai_predictions.predictions) {
+        const predictions = aiResult.ai_predictions.predictions;
+        
+        // 予想順位でソート
+        predictions.sort((a, b) => a.predicted_rank - b.predicted_rank);
+        
+        // トップ3を取得
+        const top3 = predictions.slice(0, 3);
+        
+        // 画面に表示（要素が存在する場合）
+        if (document.getElementById('predicted-winner')) {
+            document.getElementById('predicted-winner').textContent = top3[0].boat_number;
+        }
+        
+        if (document.getElementById('win-probability')) {
+            const winProb = Math.round(top3[0].normalized_probability * 100);
+            document.getElementById('win-probability').textContent = `${winProb}%`;
+        }
+        
+        // 推奨舟券表示
+        if (aiResult.ai_predictions.recommendations) {
+            const recs = aiResult.ai_predictions.recommendations;
+            console.log('推奨舟券:', recs);
+            
+            // 単勝、2連単、3連複の推奨を表示
+            alert(`🎯 AI推奨舟券\n単勝: ${recs.win.boat_number}番\n2連単: ${recs.exacta.combination.join('-')}\n3連複: ${recs.trio.combination.join('-')}`);
+        }
+        
+        // 信頼度表示
+        const confidenceLevel = aiResult.ai_predictions.analysis_summary.confidence_level;
+        console.log(`AI信頼度: ${confidenceLevel}`);
     }
 }
