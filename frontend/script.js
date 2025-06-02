@@ -706,8 +706,6 @@ function updateAITimestamp() {
     }
 }
 
- * AI予想を更新する関数
- */
 async function updateAIPrediction() {
     try {
         console.log('AI予想更新開始...');
@@ -814,3 +812,18 @@ function displayAIPredictionResult(aiResult) {
         console.log(`AI信頼度: ${confidenceLevel}`);
     }
 }
+
+// initEventListeners関数のAI部分を以下に修正
+function initAIButton() {
+    const aiButtons = document.querySelectorAll('button');
+    aiButtons.forEach(btn => {
+        if (btn.textContent.includes('AI予想') || btn.textContent.includes('🤖')) {
+            btn.onclick = updateAIPrediction;
+        }
+    });
+}
+
+// 初期化に追加
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(initAIButton, 1000);
+});
