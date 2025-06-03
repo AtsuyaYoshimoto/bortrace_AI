@@ -784,36 +784,32 @@ function displayAIPredictionResult(aiResult) {
     
     if (aiResult.ai_predictions && aiResult.ai_predictions.predictions) {
         const predictions = aiResult.ai_predictions.predictions;
-        
-        // 予想順位でソート
         predictions.sort((a, b) => a.predicted_rank - b.predicted_rank);
         
-        // トップ3を取得
-        const top3 = predictions.slice(0, 3);
-        
-        // 画面に表示（要素が存在する場合）
-        if (document.getElementById('predicted-winner')) {
-            document.getElementById('predicted-winner').textContent = top3[0].boat_number;
+        // 画面の予想結果セクションに表示
+        const winnerElement = document.getElementById('predicted-winner');
+        if (winnerElement) {
+            winnerElement.textContent = predictions[0].boat_number;
         }
         
-        if (document.getElementById('win-probability')) {
-            const winProb = Math.round(top3[0].normalized_probability * 100);
-            document.getElementById('win-probability').textContent = `${winProb}%`;
+        const probabilityElement = document.getElementById('win-probability');
+        if (probabilityElement) {
+            const winProb = Math.round(predictions[0].normalized_probability * 100);
+            probabilityElement.textContent = `${winProb}%`;
         }
         
-        // 推奨舟券表示
-        if (aiResult.ai_predictions.recommendations) {
-            const recs = aiResult.ai_predictions.recommendations;
-            console.log('推奨舟券:', recs);
-            
-            // 単勝、2連単、3連複の推奨を表示
-            alert(`🎯 AI推奨舟券\n単勝: ${recs.win.boat_number}番\n2連単: ${recs.exacta.combination.join('-')}\n3連複: ${recs.trio.combination.join('-')}`);
+        // 推奨舟券を画面に表示（alertではなく）
+        const recs = aiResult.ai_predictions.recommendations;
+        if (document.getElementById('recommended-win')) {
+            document.getElementById('recommended-win').textContent = recs.win.boat_number;
         }
-        
-        // 信頼度表示
-        const confidenceLevel = aiResult.ai_predictions.analysis_summary.confidence_level;
-        console.log(`AI信頼度: ${confidenceLevel}`);
+        if (document.getElementById('recommended-exacta')) {
+            document.getElementById('recommended-exacta').textContent = recs.exacta.combination.join('-');
+        }
     }
+    
+    // alert削除
+    console.log('AI予想結果が画面に表示されました');
 }
 
 // initEventListeners関数のAI部分を以下に修正
