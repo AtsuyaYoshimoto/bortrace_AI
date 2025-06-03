@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request, make_response
+from flask_cors import CORS
 import os
 import requests
 from bs4 import BeautifulSoup
@@ -23,6 +24,7 @@ except ImportError as e:
     AI_AVAILABLE = False
 
 app = Flask(__name__)
+CORS(app)
 
 @app.route('/')
 def index():
@@ -553,24 +555,7 @@ def ai_debug():
             "error": str(e),
             "traceback": traceback.format_exc().split('\n')
         })
-        
-@app.after_request
-def add_cors_headers(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-    response.headers.add('Access-Control-Allow-Credentials', 'false')  # 追加
-    return response
 
-# OPTIONSリクエスト対応も追加
-@app.route('/api/ai-prediction-simple', methods=['OPTIONS'])
-def ai_prediction_simple_options():
-    response = make_response()
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-    response.headers.add('Access-Control-Max-Age', '3600')  # 追加
-    return response, 200  # ステータスコードを明示的に指定
 @app.route('/api/ai-prediction-simple', methods=['POST'])
 def ai_prediction_simple():
     data = request.get_json()
