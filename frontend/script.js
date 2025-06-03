@@ -612,19 +612,6 @@ function updateTimestamp(timestamp) {
         }
     }
 }
-    
-    // 要素の存在チェックを追加
-    const lastUpdatedElement = document.getElementById('last-updated');
-    if (lastUpdatedElement) {
-        lastUpdatedElement.textContent = formatted;
-    } else {
-        console.warn('last-updated要素が見つかりません');
-        // 代替として、他の場所に時刻を表示
-        const raceDate = document.querySelector('.race-header span');
-        if (raceDate) {
-            raceDate.textContent = `最終更新: ${formatted}`;
-        }
-    }
 
 // モックデータ生成関数（loadAIPrediction関数の前に追加）
 function generateMockAIPrediction() {
