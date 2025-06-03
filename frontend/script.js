@@ -741,11 +741,10 @@ async function updateAIPrediction() {
         // AI予想結果を画面に表示
         displayAIPredictionResult(aiResult);
         
-        alert('🤖 AI予想が更新されました！');
-        
     } catch (error) {
         console.error('AI予想エラー:', error);
-        alert(`AI予想の更新に失敗しました: ${error.message}`);
+        
+        (`AI予想の更新に失敗しました: ${error.message}`);
     }
 }
 
