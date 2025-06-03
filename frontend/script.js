@@ -661,15 +661,31 @@ async function loadAIPrediction() {
         }
         
         // 予測結果を表示
-        if (prediction.predictions && prediction.predictions.length > 0) {
-            const topPrediction = prediction.predictions[0];
+        if (prediction.ai_predictions && prediction.ai_predictions.predictions && prediction.ai_predictions.predictions.length > 0) {
+            const topPrediction = prediction.ai_predictions.predictions[0];
             
-            document.getElementById('predicted-winner').textContent = topPrediction.boat_number;
-            document.getElementById('predicted-winner-name').textContent = `選手${topPrediction.boat_number}`;
-            document.getElementById('win-probability').textContent = `${Math.round(topPrediction.rank_probabilities[0] * 100)}%`;
-            document.getElementById('win-confidence').textContent = '85';
+            // DOM要素の存在チェック付きで更新
+            const winnerElement = document.getElementById('predicted-winner');
+            if (winnerElement) {
+                winnerElement.textContent = topPrediction.boat_number;
+            }
+            
+            const winnerNameElement = document.getElementById('predicted-winner-name');
+            if (winnerNameElement) {
+                winnerNameElement.textContent = `選手${topPrediction.boat_number}`;
+            }
+            
+            const probabilityElement = document.getElementById('win-probability');
+            if (probabilityElement) {
+                const winProb = Math.round(topPrediction.normalized_probability * 100);
+                probabilityElement.textContent = `${winProb}%`;
+            }
+            
+            const confidenceElement = document.getElementById('win-confidence');
+            if (confidenceElement) {
+                confidenceElement.textContent = '85';
+            }
         }
-        
         updateAITimestamp();
         console.log('AI予想データ取得完了');
         
