@@ -566,49 +566,22 @@ def ai_debug():
 def ai_prediction_simple():
     data = request.get_json()
     try:
-        # AI_AVAILABLEの状態に関係なくモックデータを返す
-        if not AI_AVAILABLE:
-            print("AI model not available, returning mock data")
-        
-        print(f"Received data: {data}")
-        
-        # モック予想データを返す
-        return jsonify({
-            "ai_predictions": {
-                "predictions": [
-                    {"boat_number": 1, "predicted_rank": 1, "normalized_probability": 0.35},
-                    {"boat_number": 3, "predicted_rank": 2, "normalized_probability": 0.28},
-                    {"boat_number": 2, "predicted_rank": 3, "normalized_probability": 0.20},
-                    {"boat_number": 4, "predicted_rank": 4, "normalized_probability": 0.10},
-                    {"boat_number": 5, "predicted_rank": 5, "normalized_probability": 0.05},
-                    {"boat_number": 6, "predicted_rank": 6, "normalized_probability": 0.02}
-                ],
-                "recommendations": {
-                    "win": {"boat_number": 1},
-                    "exacta": {"combination": [1, 3]},
-                    "trio": {"combination": [1, 3, 2]}
-                },
-                "analysis_summary": {
-                    "confidence_level": "High"
-                }
-            },
-            "status": "success"
-        })
-        
+        if AI_AVAILABLE:
+            racers = data.get('racers', [])
+            race_id = f"20250604_01_01"
+            
+            prediction = ai_model.get_race_prediction(race_id)
+            
+            if prediction:
+                return jsonify(prediction)
+            else:
+                return jsonify(get_mock_prediction(race_id))
+        else:
+            return jsonify(get_mock_prediction("fallback"))
+            
     except Exception as e:
-        print(f"Error in ai_prediction_simple: {str(e)}")
-        return jsonify({
-            "ai_predictions": {
-                "predictions": [
-                    {"boat_number": 1, "predicted_rank": 1, "normalized_probability": 0.30}
-                ],
-                "recommendations": {
-                    "win": {"boat_number": 1},
-                    "exacta": {"combination": [1, 2]},
-                    "trio": {"combination": [1, 2, 3]}
-                }
-            }
-        }), 200
+        print(f"AI予想エラー: {str(e)}")
+        return jsonify(get_mock_prediction("error"))
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
