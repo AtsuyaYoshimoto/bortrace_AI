@@ -14,6 +14,8 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
 
+print("🔍 sys.path設定完了、インポート開始...")
+
 try:
     from boat_race_prediction_system import BoatRaceAI
     print("🤖 AIモデル初期化開始...")
@@ -24,6 +26,8 @@ except Exception as e:
     print(f"❌ AI model initialization failed: {e}")
     print(f"エラー詳細: {type(e).__name__}")
     AI_AVAILABLE = False
+
+print(f"🔍 AI初期化処理完了: AI_AVAILABLE = {AI_AVAILABLE}")
 
 app = Flask(__name__)
 CORS(app)
