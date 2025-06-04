@@ -545,7 +545,7 @@ def ai_predict():
 def ai_status():
     return jsonify({
         "ai_available": AI_AVAILABLE,
-        "status": "ok"
+        "status": "ok",
         "model_type": "deep_learning" if AI_AVAILABLE else "mock"
     })
 
