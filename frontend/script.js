@@ -805,9 +805,9 @@ function displayAIPredictionResult(aiResult) {
         if (document.getElementById('recommended-exacta')) {
             document.getElementById('recommended-exacta').textContent = recs.exacta.combination.join('-');
         }
-        if (document.getElementById('recommended-trio')) {
-        document.getElementById('recommended-trio').textContent = recs.trio.combination.join('-');
-        }
+        if (document.getElementById('recommended-trifecta')) {
+ 　　   document.getElementById('recommended-trifecta').textContent = recs.trio.combination.join('-');
+　      }
     }
     
     // alert削除
