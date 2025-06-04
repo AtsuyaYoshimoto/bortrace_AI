@@ -1284,6 +1284,81 @@ class BoatRaceAI:
             'water_temp': random.randint(10, 30),
             'impact_level': random.choice(['低', '中', '高'])
         }
+        
+    def _calculate_detailed_racer_score(self, racer, venue_data, weather_data):
+        """詳細な選手スコア計算"""
+        score = 50  # ベーススコア
+        breakdown = {}
+        
+        # 1. 基本能力評価（40点満点）
+        class_scores = {'A1': 40, 'A2': 30, 'B1': 20, 'B2': 10}
+        class_score = class_scores.get(racer.get('class', 'B2'), 10)
+        score += class_score
+        breakdown['class_ability'] = class_score
+        
+        # 2. 年齢・体重評価（20点満点）
+        age = racer.get('age', 30)
+        age_score = 20 if 25 <= age <= 32 else 15 if 22 <= age <= 38 else 10
+        
+        weight_str = racer.get('weight', '55.0kg')
+        try:
+            weight = float(weight_str.replace('kg', ''))
+            weight_score = 10 if weight < 50 else 8 if weight < 52 else 5
+        except:
+            weight_score = 5
+        
+        physical_score = age_score + weight_score
+        score += physical_score
+        breakdown['physical'] = physical_score
+        
+        # 3. コース別評価（25点満点）
+        boat_num = racer.get('boat_number', 1)
+        course_score = self._calculate_course_advantage(boat_num, venue_data)
+        score += course_score
+        breakdown['course'] = course_score
+        
+        # 4. 気象条件適性（15点満点）
+        weather_score = self._calculate_weather_adaptation(racer, weather_data, boat_num)
+        score += weather_score
+        breakdown['weather'] = weather_score
+        
+        return score
+
+    def _calculate_course_advantage(self, boat_number, venue_data):
+        """コース有利度計算"""
+        base_scores = {1: 25, 2: 18, 3: 12, 4: 8, 5: 5, 6: 3}
+        base_score = base_scores.get(boat_number, 3)
+        
+        # 会場特性による補正
+        inner_advantage = venue_data['inner_advantage']
+        if inner_advantage > 0.8 and boat_number == 1:
+            base_score += 5  # インコース超有利会場
+        elif inner_advantage < 0.7 and boat_number >= 4:
+            base_score += 3  # アウト有利会場
+        
+        return base_score
+    
+    def _calculate_weather_adaptation(self, racer, weather_data, boat_number):
+        """気象条件適性計算"""
+        score = 10  # ベーススコア
+        
+        # 風の影響
+        if weather_data['wind_strength'] in ['強風', '中風']:
+            if boat_number == 1:
+                score += 3  # インコースは風に強い
+            elif boat_number >= 5:
+                score -= 2  # アウトコースは風に弱い
+        
+        # 波の影響
+        if weather_data['wave_height'] >= 2:
+            try:
+                weight = float(racer.get('weight', '55kg').replace('kg', ''))
+                if weight < 50:
+                    score -= 2  # 軽い選手は波に弱い
+            except:
+                pass
+        
+        return max(0, score)
     
     def get_comprehensive_prediction(self, racers_data, venue_code='01'):
         """総合的な競艇予想分析"""
