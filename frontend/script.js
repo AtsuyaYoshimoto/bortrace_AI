@@ -806,7 +806,7 @@ function displayAIPredictionResult(aiResult) {
             document.getElementById('recommended-exacta').textContent = recs.exacta.combination.join('-');
         }
         if (document.getElementById('recommended-trifecta')) {
- 　　   document.getElementById('recommended-trifecta').textContent = recs.trio.combination.join('-');
+   　       document.getElementById('recommended-trifecta').textContent = recs.trio.combination.join('-');
 　      }
     }
     
