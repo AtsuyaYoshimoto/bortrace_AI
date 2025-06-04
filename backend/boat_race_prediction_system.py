@@ -1990,6 +1990,28 @@ def main():
     # API サーバー起動
     api.run_flask_api()
 
+def get_comprehensive_prediction(self, racers_data, venue_code='01'):
+    """総合的な競艇予想分析"""
+    logger.info(f"総合予想開始: 会場{venue_code}, 選手数{len(racers_data)}")
+    
+    if not racers_data:
+        return self._get_default_prediction()
+    
+    # 会場分析
+    venue_analysis = self._analyze_venue_characteristics(venue_code)
+    
+    # 気象条件分析
+    weather_analysis = self._analyze_weather_conditions()
+    
+    # 選手総合評価
+    racer_evaluations = []
+    for racer in racers_data:
+        evaluation = self._evaluate_racer_comprehensive(racer, venue_analysis, weather_analysis)
+        racer_evaluations.append(evaluation)
+    
+    # 予想結果生成
+    return self._generate_comprehensive_result(racer_evaluations, venue_analysis, weather_analysis)
+
 
 if __name__ == "__main__":
     main()
