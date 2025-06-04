@@ -1371,25 +1371,20 @@ class BoatRaceAI:
                     "recommendations": {"win": {"boat_number": 1}}
                 }
             }
+    
+        # 会場特性と気象条件を取得
+        venue_data = self._get_venue_characteristics(venue_code)
+        weather_data = self._get_weather_conditions()
         
-        # 選手評価（簡易版）
+        # 選手評価（詳細版）
         racer_scores = []
         for racer in racers_data:
-            score = 50  # ベーススコア
-            
-            # クラス評価
-            if racer.get('class') == 'A1':
-                score += 30
-            elif racer.get('class') == 'A2':
-                score += 20
-            
-            # 1号艇有利
-            if racer.get('boat_number') == 1:
-                score += 25
-                
+            score = self._calculate_detailed_racer_score(racer, venue_data, weather_data)
             racer_scores.append({
                 'boat_number': racer.get('boat_number', 1),
-                'score': score
+                'score': score,
+                'venue': venue_data['name'],
+                'weather': weather_data['impact_level']
             })
         
         # スコア順ソート
