@@ -1773,144 +1773,6 @@ class BoatRaceAI:
             logger.error(f"Webレポート保存エラー: {str(e)}")
             return False
 
-
-class BoatRaceWebAPI:
-    """
-    競艇AI予測システムのWeb API
-    - 予測情報の提供
-    - レポート生成
-    - リアルタイム更新
-    """
-    
-    def __init__(self, boat_race_ai):
-        """初期化"""
-        self.boat_race_ai = boat_race_ai
-        self.cached_predictions = {}
-        self.cached_reports = {}
-        self.last_update = {}
-        
-    def get_today_races(self):
-        """今日のレース情報取得"""
-        today = datetime.datetime.now().strftime("%Y%m%d")
-        
-        # キャッシュ確認
-        cache_key = f"races_{today}"
-        if cache_key in self.cached_predictions:
-            # 1時間以内のキャッシュなら利用
-            if (datetime.datetime.now() - self.last_update.get(cache_key, datetime.datetime.min)).seconds < 3600:
-                return self.cached_predictions[cache_key]
-        
-        # 新規取得
-        races = self.boat_race_ai.data_collector.get_race_schedule(today)
-        
-        # キャッシュ更新
-        self.cached_predictions[cache_key] = races
-        self.last_update[cache_key] = datetime.datetime.now()
-        
-        return races
-    
-    def get_race_prediction(self, race_id):
-        """レース予測取得API"""
-        # キャッシュ確認
-        cache_key = f"prediction_{race_id}"
-        if cache_key in self.cached_predictions:
-            # 30分以内のキャッシュなら利用
-            if (datetime.datetime.now() - self.last_update.get(cache_key, datetime.datetime.min)).seconds < 1800:
-                return self.cached_predictions[cache_key]
-        
-        # 新規予測取得
-        prediction = self.boat_race_ai.get_race_prediction(race_id)
-        
-        if prediction:
-            # キャッシュ更新
-            self.cached_predictions[cache_key] = prediction
-            self.last_update[cache_key] = datetime.datetime.now()
-        
-        return prediction
-    
-    def get_daily_report(self, date=None):
-        """日次レポート取得API"""
-        if date is None:
-            date = datetime.datetime.now().strftime("%Y%m%d")
-            
-        # キャッシュ確認
-        cache_key = f"report_{date}"
-        if cache_key in self.cached_reports:
-            # 1時間以内のキャッシュなら利用
-            if (datetime.datetime.now() - self.last_update.get(cache_key, datetime.datetime.min)).seconds < 3600:
-                return self.cached_reports[cache_key]
-        
-        # 新規レポート生成
-        report = self.boat_race_ai.generate_daily_report(date)
-        
-        if report:
-            # キャッシュ更新
-            self.cached_reports[cache_key] = report
-            self.last_update[cache_key] = datetime.datetime.now()
-        
-        return report
-    
-    def get_web_report(self, date=None):
-        """Web表示用レポート取得API"""
-        if date is None:
-            date = datetime.datetime.now().strftime("%Y%m%d")
-            
-        # キャッシュ確認
-        cache_key = f"web_report_{date}"
-        if cache_key in self.cached_reports:
-            # 1時間以内のキャッシュなら利用
-            if (datetime.datetime.now() - self.last_update.get(cache_key, datetime.datetime.min)).seconds < 3600:
-                return self.cached_reports[cache_key]
-        
-        # 新規Web用レポート生成
-        web_report = self.boat_race_ai.generate_web_report(date)
-        
-        if web_report:
-            # キャッシュ更新
-            self.cached_reports[cache_key] = web_report
-            self.last_update[cache_key] = datetime.datetime.now()
-        
-        return web_report
-    
-    def get_performance_stats(self, days=30):
-        """パフォーマンス統計取得API"""
-        # キャッシュ確認
-        cache_key = f"stats_{days}"
-        if cache_key in self.cached_reports:
-            # 6時間以内のキャッシュなら利用
-            if (datetime.datetime.now() - self.last_update.get(cache_key, datetime.datetime.min)).seconds < 21600:
-                return self.cached_reports[cache_key]
-        
-        # 新規統計取得
-        stats = self.boat_race_ai.prediction_model.get_performance_stats(days)
-        
-        if stats:
-            # キャッシュ更新
-            self.cached_reports[cache_key] = stats
-            self.last_update[cache_key] = datetime.datetime.now()
-        
-        return stats
-    
-    def clear_cache(self, key=None):
-        """キャッシュクリア"""
-        if key:
-            if key in self.cached_predictions:
-                del self.cached_predictions[key]
-                logger.info(f"予測キャッシュクリア: {key}")
-            
-            if key in self.cached_reports:
-                del self.cached_reports[key]
-                logger.info(f"レポートキャッシュクリア: {key}")
-                
-            if key in self.last_update:
-                del self.last_update[key]
-        else:
-            # 全キャッシュクリア
-            self.cached_predictions = {}
-            self.cached_reports = {}
-            self.last_update = {}
-            logger.info("全キャッシュクリア完了")
-    
     def run_flask_api(self, host='0.0.0.0', port=5000):
         """Flask APIサーバーの実行"""
         from flask import Flask, jsonify, request, render_template_string
@@ -1958,38 +1820,6 @@ class BoatRaceWebAPI:
         logger.info(f"Flask API サーバー起動: {host}:{port}")
         app.run(host=host, port=port, debug=False)
 
-
-def main():
-    """メイン関数"""
-    logger.info("競艇AI予測システム 起動")
-    
-    # システム初期化
-    boat_race_ai = BoatRaceAI()
-    
-    # 過去データ収集（初回のみ）
-    if not os.path.exists("boatrace_data.db") or os.path.getsize("boatrace_data.db") < 1024:
-        logger.info("初期データ収集開始")
-        boat_race_ai.collect_historical_data(days=30)
-    
-    # モデル学習（初回のみ）
-    if not os.path.exists("models/boatrace_model.h5"):
-        logger.info("初期モデル学習開始")
-        collected_data = boat_race_ai.collect_historical_data(days=30)
-        training_data = boat_race_ai.prepare_training_data(collected_data)
-        boat_race_ai.train_prediction_model(training_data)
-    
-    # Web API 初期化
-    api = BoatRaceWebAPI(boat_race_ai)
-    
-    # バックグラウンドでスケジュールタスク開始
-    import threading
-    scheduler_thread = threading.Thread(target=boat_race_ai.start_scheduled_tasks)
-    scheduler_thread.daemon = True
-    scheduler_thread.start()
-    
-    # API サーバー起動
-    api.run_flask_api()
-
 def get_comprehensive_prediction(self, racers_data, venue_code='01'):
     """総合的な競艇予想分析"""
     logger.info(f"総合予想開始: 会場{venue_code}, 選手数{len(racers_data)}")
@@ -1997,21 +1827,35 @@ def get_comprehensive_prediction(self, racers_data, venue_code='01'):
     if not racers_data:
         return self._get_default_prediction()
     
-    # 会場分析
-    venue_analysis = self._analyze_venue_characteristics(venue_code)
-    
-    # 気象条件分析
-    weather_analysis = self._analyze_weather_conditions()
-    
-    # 選手総合評価
-    racer_evaluations = []
+    # 選手評価スコア計算（一貫性のある予想）
+    racer_scores = []
     for racer in racers_data:
-        evaluation = self._evaluate_racer_comprehensive(racer, venue_analysis, weather_analysis)
-        racer_evaluations.append(evaluation)
+        score = self._calculate_racer_score(racer, venue_code)
+        racer_scores.append({
+            'boat_number': racer.get('boat_number', 1),
+            'score': score,
+            'racer': racer
+        })
     
-    # 予想結果生成
-    return self._generate_comprehensive_result(racer_evaluations, venue_analysis, weather_analysis)
-
+    # スコア順にソート（高い順）
+    racer_scores.sort(key=lambda x: x['score'], reverse=True)
+    top3 = [r['boat_number'] for r in racer_scores[:3]]
+    
+    return {
+        "ai_predictions": {
+            "predictions": [
+                {"boat_number": top3[0], "predicted_rank": 1, "normalized_probability": 0.35},
+                {"boat_number": top3[1], "predicted_rank": 2, "normalized_probability": 0.28},
+                {"boat_number": top3[2], "predicted_rank": 3, "normalized_probability": 0.20}
+            ],
+            "recommendations": {
+                "win": {"boat_number": top3[0]},
+                "exacta": {"combination": top3[:2]},
+                "trio": {"combination": top3}
+            },
+            "analysis_logic": "総合評価による一貫した予想"
+        }
+    }
 
 if __name__ == "__main__":
     main()
