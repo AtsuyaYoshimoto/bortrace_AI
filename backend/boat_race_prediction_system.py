@@ -1244,56 +1244,56 @@ class BoatRaceAI:
         logger.info("競艇AI予測システム初期化完了")
 
     def get_comprehensive_prediction(self, racers_data, venue_code='01'):
-    """総合的な競艇予想分析"""
-    logger.info(f"総合予想開始: 会場{venue_code}, 選手数{len(racers_data)}")
-    
-    if not racers_data:
+        """総合的な競艇予想分析"""
+        logger.info(f"総合予想開始: 会場{venue_code}, 選手数{len(racers_data)}")
+        
+        if not racers_data:
+            return {
+                "ai_predictions": {
+                    "predictions": [{"boat_number": 1, "predicted_rank": 1, "normalized_probability": 0.30}],
+                    "recommendations": {"win": {"boat_number": 1}}
+                }
+            }
+        
+        # 選手評価（簡易版）
+        racer_scores = []
+        for racer in racers_data:
+            score = 50  # ベーススコア
+            
+            # クラス評価
+            if racer.get('class') == 'A1':
+                score += 30
+            elif racer.get('class') == 'A2':
+                score += 20
+            
+            # 1号艇有利
+            if racer.get('boat_number') == 1:
+                score += 25
+                
+            racer_scores.append({
+                'boat_number': racer.get('boat_number', 1),
+                'score': score
+            })
+        
+        # スコア順ソート
+        racer_scores.sort(key=lambda x: x['score'], reverse=True)
+        top3 = [r['boat_number'] for r in racer_scores[:3]]
+        
         return {
             "ai_predictions": {
-                "predictions": [{"boat_number": 1, "predicted_rank": 1, "normalized_probability": 0.30}],
-                "recommendations": {"win": {"boat_number": 1}}
+                "predictions": [
+                    {"boat_number": top3[0], "predicted_rank": 1, "normalized_probability": 0.35},
+                    {"boat_number": top3[1], "predicted_rank": 2, "normalized_probability": 0.28},
+                    {"boat_number": top3[2], "predicted_rank": 3, "normalized_probability": 0.20}
+                ],
+                "recommendations": {
+                    "win": {"boat_number": top3[0]},
+                    "exacta": {"combination": top3[:2]},
+                    "trio": {"combination": top3}
+                }
             }
         }
-    
-    # 選手評価（簡易版）
-    racer_scores = []
-    for racer in racers_data:
-        score = 50  # ベーススコア
         
-        # クラス評価
-        if racer.get('class') == 'A1':
-            score += 30
-        elif racer.get('class') == 'A2':
-            score += 20
-        
-        # 1号艇有利
-        if racer.get('boat_number') == 1:
-            score += 25
-            
-        racer_scores.append({
-            'boat_number': racer.get('boat_number', 1),
-            'score': score
-        })
-    
-    # スコア順ソート
-    racer_scores.sort(key=lambda x: x['score'], reverse=True)
-    top3 = [r['boat_number'] for r in racer_scores[:3]]
-    
-    return {
-        "ai_predictions": {
-            "predictions": [
-                {"boat_number": top3[0], "predicted_rank": 1, "normalized_probability": 0.35},
-                {"boat_number": top3[1], "predicted_rank": 2, "normalized_probability": 0.28},
-                {"boat_number": top3[2], "predicted_rank": 3, "normalized_probability": 0.20}
-            ],
-            "recommendations": {
-                "win": {"boat_number": top3[0]},
-                "exacta": {"combination": top3[:2]},
-                "trio": {"combination": top3}
-            }
-        }
-    }
-    
     def collect_historical_data(self, days=30):
         """過去データの収集"""
         logger.info(f"過去データ収集開始: {days}日分")
