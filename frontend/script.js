@@ -814,6 +814,8 @@ function displayAIPredictionResult(aiResult) {
     }
     // alert削除
     console.log('AI予想結果が画面に表示されました');
+    console.log('全recommendations:', recs);
+    console.log('trio_patterns:', recs.trio_patterns);
 }
 
 // initEventListeners関数のAI部分を以下に修正
