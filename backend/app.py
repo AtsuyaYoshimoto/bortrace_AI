@@ -595,9 +595,9 @@ def train_daily():
 
 # バックグラウンドでデータ収集開始
 import threading
-scheduler_thread = threading.Thread(target=ai_model.start_scheduled_tasks)
-scheduler_thread.daemon = True
-scheduler_thread.start()
+#scheduler_thread = threading.Thread(target=ai_model.start_scheduled_tasks)
+#scheduler_thread.daemon = True
+#scheduler_thread.start()
 logger.info("データ収集スケジューラー開始")
 
 if __name__ == '__main__':
