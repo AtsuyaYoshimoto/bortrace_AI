@@ -1528,22 +1528,41 @@ class BoatRaceAI:
         
         # スコア順ソート
         racer_scores.sort(key=lambda x: x['score'], reverse=True)
-        top3 = [r['boat_number'] for r in racer_scores[:3]]
+        top4 = [r['boat_number'] for r in racer_scores[:4]]
+        trio_patterns = [
+            [top4[0], top4[1], top4[2]],  # 1-2-3着予想
+            [top4[0], top4[2], top4[1]],  # 1-3-2着予想
+            [top4[1], top4[0], top4[2]],  # 2-1-3着予想
+            [top4[0], top4[1], top4[3]],  # 1-2-4着予想
+            [top4[0], top4[3], top4[1]]   # 1-4-2着予想
+        ]
+        
+        # 各パターンの期待値計算
+        trio_recommendations = []
+        for i, pattern in enumerate(trio_patterns):
+            confidence = 0.35 - (i * 0.05)  # 確率を段階的に下げる
+            trio_recommendations.append({
+                "combination": pattern,
+                "confidence": round(confidence, 2),
+                "pattern_name": f"パターン{i+1}"
+            })
         
         return {
             "ai_predictions": {
                 "predictions": [
-                    {"boat_number": top3[0], "predicted_rank": 1, "normalized_probability": 0.35},
-                    {"boat_number": top3[1], "predicted_rank": 2, "normalized_probability": 0.28},
-                    {"boat_number": top3[2], "predicted_rank": 3, "normalized_probability": 0.20}
+                    {"boat_number": top4[0], "predicted_rank": 1, "normalized_probability": 0.35},
+                    {"boat_number": top4[1], "predicted_rank": 2, "normalized_probability": 0.28},
+                    {"boat_number": top4[2], "predicted_rank": 3, "normalized_probability": 0.20},
+                    {"boat_number": top4[3], "predicted_rank": 4, "normalized_probability": 0.10}
                 ],
                 "recommendations": {
-                    "win": {"boat_number": top3[0]},
-                    "exacta": {"combination": top3[:2]},
-                    "trio": {"combination": top3}
+                    "win": {"boat_number": top4[0]},
+                    "exacta": {"combination": top4[:2]},
+                    "trio_patterns": trio_recommendations
                 }
             }
         }
+
         
     def collect_historical_data(self, days=30):
         """過去データの収集"""
