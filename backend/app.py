@@ -581,6 +581,18 @@ def ai_prediction_simple():
         print(f"AI予想エラー: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/train-daily', methods=['POST'])
+def train_daily():
+    try:
+        if AI_AVAILABLE:
+            # 過去3日分のデータで学習
+            ai_model.train_prediction_model(epochs=5)
+            return jsonify({"status": "success", "message": "Daily training completed"})
+        else:
+            return jsonify({"error": "AI not available"}), 503
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
