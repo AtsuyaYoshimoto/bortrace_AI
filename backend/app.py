@@ -13,6 +13,8 @@ from datetime import datetime, timedelta
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
+import logging
+logger = logging.getLogger(__name__)
 
 print("🔍 sys.path設定完了、インポート開始...")
 
