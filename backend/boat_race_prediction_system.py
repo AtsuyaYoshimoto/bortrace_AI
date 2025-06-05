@@ -1737,7 +1737,7 @@ class BoatRaceAI:
         if current_weekday == 0:  # 月曜日に再学習
             collected_data = self.collect_historical_data(days=30)
             training_data = self.prepare_training_data(collected_data)
-            self.train_prediction_model(training_data)
+            #self.train_prediction_model(training_data) ←一時的に無効化（2025/06/05）
         
         logger.info("日次更新ルーチン完了")
     
