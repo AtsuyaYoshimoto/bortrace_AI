@@ -581,7 +581,7 @@ def ai_prediction_simple():
         print(f"AI予想エラー: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/train-daily', methods=['POST'])
+@app.route('/api/train-daily', methods=['GET', 'POST'])
 def train_daily():
     try:
         if AI_AVAILABLE:
