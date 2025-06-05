@@ -806,9 +806,11 @@ function displayAIPredictionResult(aiResult) {
             document.getElementById('recommended-exacta').textContent = recs.exacta.combination.join('-');
         }
         if (document.getElementById('recommended-trifecta')) {
-   　       document.getElementById('recommended-trifecta').textContent = recs.trio.combination.join('-');
-　      }
-    }
+            // 最初のパターンを表示
+            if (recs.trio_patterns && recs.trio_patterns[0]) {
+                document.getElementById('recommended-trifecta').textContent = recs.trio_patterns[0].combination.join('-');
+            }
+        }
     
     // alert削除
     console.log('AI予想結果が画面に表示されました');
