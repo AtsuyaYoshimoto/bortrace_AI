@@ -811,7 +811,7 @@ function displayAIPredictionResult(aiResult) {
                 document.getElementById('recommended-trifecta').textContent = recs.trio_patterns[0].combination.join('-');
             }
         }
-    
+    }
     // alert削除
     console.log('AI予想結果が画面に表示されました');
 }
