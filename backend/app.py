@@ -598,7 +598,7 @@ import threading
 #scheduler_thread = threading.Thread(target=ai_model.start_scheduled_tasks)
 #scheduler_thread.daemon = True
 #scheduler_thread.start()
-logger.info("データ収集スケジューラー開始")
+#logger.info("データ収集スケジューラー開始")
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
