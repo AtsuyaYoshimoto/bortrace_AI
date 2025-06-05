@@ -1285,7 +1285,7 @@ class BoatRaceAI:
             'impact_level': random.choice(['低', '中', '高'])
         }
         
-    def _calculate_detailed_racer_score(self, racer, venue_data, weather_data):
+    def _calculate_detailed_racer_score(self, racer, venue_data, weather_data, racers_data):
         """詳細な選手スコア計算"""
         score = 50  # ベーススコア
         breakdown = {}
@@ -1518,7 +1518,7 @@ class BoatRaceAI:
         # 選手評価（詳細版）
         racer_scores = []
         for racer in racers_data:
-            score = self._calculate_detailed_racer_score(racer, venue_data, weather_data)
+            score = self._calculate_detailed_racer_score(racer, venue_data, weather_data, racers_data)
             racer_scores.append({
                 'boat_number': racer.get('boat_number', 1),
                 'score': score,
