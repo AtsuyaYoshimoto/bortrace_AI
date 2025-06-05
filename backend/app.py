@@ -593,6 +593,13 @@ def train_daily():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# バックグラウンドでデータ収集開始
+import threading
+scheduler_thread = threading.Thread(target=ai_model.start_scheduled_tasks)
+scheduler_thread.daemon = True
+scheduler_thread.start()
+logger.info("データ収集スケジューラー開始")
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
