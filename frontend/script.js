@@ -797,25 +797,28 @@ function displayAIPredictionResult(aiResult) {
             probabilityElement.textContent = `${winProb}%`;
         }
         
-        // 推奨舟券を画面に表示（alertではなく）
-        const recs = aiResult.ai_predictions.recommendations;
-        if (document.getElementById('recommended-win')) {
-            document.getElementById('recommended-win').textContent = recs.win.boat_number;
-        }
-        if (document.getElementById('recommended-exacta')) {
-            document.getElementById('recommended-exacta').textContent = recs.exacta.combination.join('-');
-        }
-        if (document.getElementById('recommended-trifecta')) {
-            // 最初のパターンを表示
-            if (recs.trio_patterns && recs.trio_patterns[0]) {
-                document.getElementById('recommended-trifecta').textContent = recs.trio_patterns[0].combination.join('-');
+        // 推奨舟券の存在確認
+        if (aiResult.ai_predictions.recommendations) {
+            const recs = aiResult.ai_predictions.recommendations;
+            console.log('全recommendations:', recs);
+            console.log('trio_patterns:', recs.trio_patterns);
+            
+            if (document.getElementById('recommended-win')) {
+                document.getElementById('recommended-win').textContent = recs.win.boat_number;
             }
+            if (document.getElementById('recommended-exacta')) {
+                document.getElementById('recommended-exacta').textContent = recs.exacta.combination.join('-');
+            }
+            if (document.getElementById('recommended-trifecta')) {
+                if (recs.trio_patterns && recs.trio_patterns[0]) {
+                    document.getElementById('recommended-trifecta').textContent = recs.trio_patterns[0].combination.join('-');
+                }
+            }
+        } else {
+            console.log('recommendations が存在しません');
         }
     }
-    // alert削除
     console.log('AI予想結果が画面に表示されました');
-    console.log('全recommendations:', recs);
-    console.log('trio_patterns:', recs.trio_patterns);
 }
 
 // initEventListeners関数のAI部分を以下に修正
