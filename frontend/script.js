@@ -809,11 +809,17 @@ function displayAIPredictionResult(aiResult) {
             if (document.getElementById('recommended-exacta')) {
                 document.getElementById('recommended-exacta').textContent = recs.exacta.combination.join('-');
             }
-            if (document.getElementById('recommended-trifecta')) {
-                if (recs.trio_patterns && recs.trio_patterns[0]) {
-                    document.getElementById('recommended-trifecta').textContent = recs.trio_patterns[0].combination.join('-');
+　　　　　　　　if (document.getElementById('recommended-trifecta')) {
+                if (recs.trio_patterns && recs.trio_patterns.length > 0) {
+        // 複数パターンを表示
+                    let patternsText = '';
+                    recs.trio_patterns.forEach((pattern, index) => {
+                        if (index > 0) patternsText += ' / ';
+                        patternsText += pattern.combination.join('-');
+                    });
+                    document.getElementById('recommended-trifecta').textContent = patternsText;
                 }
-            }
+　　　　　　　　}
         } else {
             console.log('recommendations が存在しません');
         }
