@@ -74,6 +74,97 @@ document.addEventListener('DOMContentLoaded', function() {
     initEventListeners();
 });
 
+async function loadVenues() {
+    try {
+        const [venues, venueStatus] = await Promise.all([
+            boatraceAPI.getVenues(),
+            fetch(`${boatraceAPI.baseUrl}/venue-status`).then(res => res.json())
+        ]);
+        
+        const venueGrid = document.getElementById('venue-grid');
+        const loading = document.getElementById('loading');
+        const statusIndicator = document.getElementById('status-indicator');
+        
+        if (!venueGrid) return;
+        
+        loading.style.display = 'block';
+        venueGrid.style.display = 'none';
+        statusIndicator.className = 'status-indicator status-loading';
+        statusIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 開催情報取得中...';
+        
+        venueGrid.innerHTML = '';
+        
+        for (const [code, venueData] of Object.entries(venues)) {
+            const statusData = venueStatus.venue_status[code] || {};
+            const venueCard = createVenueCard(code, venueData, statusData);
+            venueGrid.appendChild(venueCard);
+        }
+        
+        loading.style.display = 'none';
+        venueGrid.style.display = 'grid';
+        statusIndicator.className = 'status-indicator status-success';
+        statusIndicator.innerHTML = '<i class="fas fa-check-circle"></i> 開催情報取得完了';
+        
+        initRegionFilter();
+        venueStatusData = venueStatus;
+        
+    } catch (error) {
+        console.error('会場一覧取得エラー:', error);
+        showVenueError(error.message);
+    }
+}
+
+function createVenueCard(venueCode, venueData, statusData) {
+    const isActive = statusData.is_active || false;
+    
+    const venueCard = document.createElement('div');
+    venueCard.className = `venue-card ${isActive ? 'active' : 'inactive'}`;
+    venueCard.dataset.venue = venueCode;
+    venueCard.dataset.region = venueData.region;
+    
+    venueCard.innerHTML = `
+        <div class="venue-header">
+            <div>
+                <div class="venue-name">${venueData.name}</div>
+                <div class="venue-location">${venueData.location}</div>
+            </div>
+            <div class="status-indicator"></div>
+        </div>
+        <div class="venue-content">
+            <div class="race-status">
+                <div class="current-race">${isActive ? `第${statusData.current_race}R` : '本日開催なし'}</div>
+                <div class="race-time">${statusData.current_time || '-'}</div>
+            </div>
+            <div class="next-info">
+                <div class="next-race">${isActive ? '次走' : '次回開催'}</div>
+                <div class="next-time">${statusData.next_race || '調査中'}</div>
+            </div>
+            <div class="venue-stats">
+                <div class="stat-item">
+                    <div class="stat-number">${statusData.total_races || '-'}${statusData.total_races ? 'R' : ''}</div>
+                    <div>全レース数</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">${statusData.remaining_races || '-'}${statusData.remaining_races ? 'R' : ''}</div>
+                    <div>残りレース</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">${statusData.last_race_time || '-'}</div>
+                    <div>最終R</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    venueCard.addEventListener('click', function() {
+        if (isActive) {
+            selectVenue(venueCode, venueData.name);
+        }
+    });
+    
+    return venueCard;
+}
+
 async function initApp() {
     await loadVenues(); 
     await loadRealTimeData();
