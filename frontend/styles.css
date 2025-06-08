@@ -1215,3 +1215,309 @@ footer {
     0%, 100% { transform: scale(1); opacity: 0.8; }
     50% { transform: scale(1.1); opacity: 1; }
 }
+
+/* ==========================================
+   競艇場開催状況UI - style.cssの最後に追加
+   ========================================== */
+
+/* 開催状況グリッド */
+.venue-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.venue-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    border: 3px solid transparent;
+}
+
+.venue-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+.venue-card.active {
+    border-color: var(--primary);
+    box-shadow: 0 4px 12px rgba(0, 102, 204, 0.2);
+}
+
+.venue-card.active:hover {
+    border-color: var(--primary-dark);
+}
+
+.venue-card.inactive {
+    opacity: 0.6;
+    background: #f8f9fa;
+    cursor: not-allowed;
+}
+
+.venue-card.inactive:hover {
+    transform: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.venue-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    color: white;
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.venue-card.inactive .venue-header {
+    background: var(--inactive, #6c757d);
+}
+
+.venue-name {
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+.venue-location {
+    font-size: 0.8rem;
+    opacity: 0.9;
+}
+
+.status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #4ade80;
+    animation: pulse 2s infinite;
+}
+
+.venue-card.inactive .status-indicator {
+    background: #6b7280;
+    animation: none;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.venue-content {
+    padding: 1.5rem;
+}
+
+.race-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.current-race {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.venue-card.inactive .current-race {
+    color: var(--inactive, #6c757d);
+}
+
+.race-time {
+    font-size: 0.9rem;
+    color: #666;
+    font-weight: 500;
+}
+
+.next-info {
+    background: #f0f5ff;
+    padding: 0.8rem;
+    border-radius: 6px;
+    border-left: 4px solid var(--primary);
+    margin-bottom: 1rem;
+}
+
+.venue-card.inactive .next-info {
+    background: #f8f9fa;
+    border-left-color: var(--inactive, #6c757d);
+}
+
+.next-race {
+    font-size: 0.9rem;
+    color: #555;
+    margin-bottom: 0.3rem;
+}
+
+.next-time {
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.venue-card.inactive .next-time {
+    color: var(--inactive, #6c757d);
+}
+
+.venue-stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: #666;
+}
+
+.stat-item {
+    text-align: center;
+}
+
+.stat-number {
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.venue-card.inactive .stat-number {
+    color: var(--inactive, #6c757d);
+}
+
+/* 地域別フィルター */
+.region-filter {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+
+.region-btn {
+    padding: 0.6rem 1.2rem;
+    background: white;
+    border: 2px solid var(--primary);
+    color: var(--primary);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 600;
+}
+
+.region-btn:hover,
+.region-btn.active {
+    background: var(--primary);
+    color: white;
+}
+
+/* 詳細情報パネル */
+.venue-detail-panel {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    padding: 2rem;
+    margin-top: 2rem;
+    display: none;
+}
+
+.venue-detail-panel.active {
+    display: block;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+.detail-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.close-detail {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #666;
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
+
+.close-detail:hover {
+    color: var(--danger);
+}
+
+.race-timeline {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.race-slot {
+    padding: 1rem;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.race-slot.completed {
+    background: #e5e7eb;
+    color: #6b7280;
+}
+
+.race-slot.live {
+    background: var(--danger);
+    color: white;
+    animation: pulse 1s infinite;
+}
+
+.race-slot.upcoming {
+    background: var(--primary);
+    color: white;
+}
+
+.race-slot.upcoming:hover {
+    background: var(--primary-dark);
+    transform: translateY(-2px);
+}
+
+.race-number {
+    font-size: 1.1rem;
+    margin-bottom: 0.3rem;
+}
+
+.race-schedule {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+    .venue-status-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .region-filter {
+        gap: 0.5rem;
+    }
+    
+    .region-btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+    }
+    
+    .race-timeline {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem;
+    }
+}
