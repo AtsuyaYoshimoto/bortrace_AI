@@ -1521,3 +1521,52 @@ footer {
         gap: 0.5rem;
     }
 }
+
+/* style.cssに追加：エラー表示とノーレース表示 */
+
+.no-races {
+    text-align: center;
+    padding: 2rem;
+    color: #666;
+    font-size: 1.1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.no-races::before {
+    content: '🚫';
+    display: block;
+    font-size: 2rem;
+    margin-bottom: 1rem;
+}
+
+.race-timeline .error {
+    text-align: center;
+    padding: 2rem;
+    color: var(--danger);
+    background: #f8d7da;
+    border-radius: 8px;
+}
+
+.race-timeline .error::before {
+    content: '⚠️';
+    display: block;
+    font-size: 2rem;
+    margin-bottom: 1rem;
+}
+
+/* レースステータス別の詳細スタイル */
+.race-slot.live::after {
+    content: ' 発走中';
+    font-size: 0.7rem;
+    opacity: 0.8;
+}
+
+.race-slot.completed {
+    cursor: default;
+}
+
+.race-slot.completed:hover {
+    transform: none;
+    background: #e5e7eb;
+}
