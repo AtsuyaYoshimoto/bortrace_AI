@@ -841,3 +841,358 @@ function initAIButton() {
 document.addEventListener('DOMContentLoaded', function() {
     setTimeout(initAIButton, 1000);
 });
+
+/**
+ * 競艇場開催状況UI機能
+ * script.jsの最後に追加
+ */
+
+// グローバル変数
+let currentSelectedVenue = null;
+let currentSelectedRace = null;
+let venueStatusData = {};
+
+/**
+ * 既存のloadVenues関数を競艇場開催状況UI用に更新
+ */
+async function loadVenues() {
+    try {
+        const venues = await boatraceAPI.getVenues();
+        const venueGrid = document.getElementById('venue-grid');
+        const loading = document.getElementById('loading');
+        const statusIndicator = document.getElementById('status-indicator');
+        
+        if (!venueGrid) return;
+        
+        // ローディング状態
+        loading.style.display = 'block';
+        venueGrid.style.display = 'none';
+        statusIndicator.className = 'status-indicator status-loading';
+        statusIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 開催情報取得中...';
+        
+        // 会場情報を生成
+        venueGrid.innerHTML = '';
+        
+        for (const [code, venueData] of Object.entries(venues)) {
+            const venueCard = createVenueCard(code, venueData);
+            venueGrid.appendChild(venueCard);
+        }
+        
+        // 表示切り替え
+        loading.style.display = 'none';
+        venueGrid.style.display = 'grid';
+        statusIndicator.className = 'status-indicator status-success';
+        statusIndicator.innerHTML = '<i class="fas fa-check-circle"></i> 開催情報取得完了';
+        
+        // 地域フィルター初期化
+        initRegionFilter();
+        
+    } catch (error) {
+        console.error('会場一覧取得エラー:', error);
+        showVenueError(error.message);
+    }
+}
+
+/**
+ * 会場カードを作成
+ */
+function createVenueCard(venueCode, venueData) {
+    const isActive = isVenueActive(venueCode); // 開催判定（仮実装）
+    const raceInfo = getVenueRaceInfo(venueCode); // レース情報（仮実装）
+    
+    const venueCard = document.createElement('div');
+    venueCard.className = `venue-card ${isActive ? 'active' : 'inactive'}`;
+    venueCard.dataset.venue = venueCode;
+    venueCard.dataset.region = venueData.region;
+    
+    venueCard.innerHTML = `
+        <div class="venue-header">
+            <div>
+                <div class="venue-name">${venueData.name}</div>
+                <div class="venue-location">${venueData.location}</div>
+            </div>
+            <div class="status-indicator"></div>
+        </div>
+        <div class="venue-content">
+            <div class="race-status">
+                <div class="current-race">${isActive ? `第${raceInfo.currentRace}R` : '本日開催なし'}</div>
+                <div class="race-time">${isActive ? raceInfo.currentTime : '-'}</div>
+            </div>
+            <div class="next-info">
+                <div class="next-race">${isActive ? '次走' : '次回開催'}</div>
+                <div class="next-time">${isActive ? raceInfo.nextRace : '調査中'}</div>
+            </div>
+            <div class="venue-stats">
+                <div class="stat-item">
+                    <div class="stat-number">${isActive ? '12R' : '-'}</div>
+                    <div>全レース数</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">${isActive ? raceInfo.remainingRaces : '-'}</div>
+                    <div>残りレース</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">${isActive ? '17:30' : '-'}</div>
+                    <div>最終R</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // クリックイベント
+    venueCard.addEventListener('click', function() {
+        if (isActive) {
+            selectVenue(venueCode, venueData.name);
+        }
+    });
+    
+    return venueCard;
+}
+
+/**
+ * 開催判定（仮実装 - 後で実際のAPIと連携）
+ */
+function isVenueActive(venueCode) {
+    // 仮実装：一部の会場のみ開催中とする
+    const activeVenues = ['01', '12', '20', '22', '24']; // 桐生、住之江、若松、福岡、大村
+    return activeVenues.includes(venueCode);
+}
+
+/**
+ * レース情報取得（仮実装）
+ */
+function getVenueRaceInfo(venueCode) {
+    const now = new Date();
+    const hour = now.getHours();
+    const currentRace = Math.max(1, Math.min(12, hour - 11));
+    
+    return {
+        currentRace: currentRace,
+        currentTime: `${hour}:${now.getMinutes().toString().padStart(2, '0')}〜`,
+        nextRace: `第${currentRace + 1}R ${hour + 1}:${(now.getMinutes() + 30) % 60}発走`,
+        remainingRaces: `${12 - currentRace}R`
+    };
+}
+
+/**
+ * 地域フィルター初期化
+ */
+function initRegionFilter() {
+    const regionBtns = document.querySelectorAll('.region-btn');
+    const venueCards = document.querySelectorAll('.venue-card');
+
+    regionBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            // アクティブ状態の切り替え
+            regionBtns.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+
+            const selectedRegion = this.dataset.region;
+
+            // 会場カードの表示/非表示
+            venueCards.forEach(card => {
+                if (selectedRegion === 'all' || card.dataset.region === selectedRegion) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+    });
+}
+
+/**
+ * 会場選択
+ */
+function selectVenue(venueCode, venueName) {
+    currentSelectedVenue = venueCode;
+    
+    // 選択状態の更新
+    document.querySelectorAll('.venue-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    
+    const selectedCard = document.querySelector(`[data-venue="${venueCode}"]`);
+    if (selectedCard) {
+        selectedCard.classList.add('selected');
+    }
+    
+    // 詳細パネル表示
+    showVenueDetail(venueCode, venueName);
+}
+
+/**
+ * 会場詳細表示
+ */
+function showVenueDetail(venueCode, venueName) {
+    const detailPanel = document.getElementById('detail-panel');
+    const detailTitle = document.getElementById('detail-title');
+    const raceTimeline = document.getElementById('race-timeline');
+    
+    if (!detailPanel || !detailTitle || !raceTimeline) return;
+    
+    // タイトル更新
+    detailTitle.textContent = `${venueName}競艇場 詳細情報`;
+    
+    // レースタイムライン生成
+    raceTimeline.innerHTML = '';
+    
+    for (let i = 1; i <= 12; i++) {
+        const raceSlot = document.createElement('div');
+        const now = new Date();
+        const currentRace = Math.max(1, Math.min(12, now.getHours() - 11));
+        
+        let slotClass = 'race-slot ';
+        let timeText = '';
+        
+        if (i < currentRace) {
+            slotClass += 'completed';
+            timeText = '済';
+        } else if (i === currentRace) {
+            slotClass += 'live';
+            timeText = `${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
+        } else {
+            slotClass += 'upcoming';
+            const raceHour = 12 + (i - 1) * 0.5; // 30分間隔
+            timeText = `${Math.floor(raceHour)}:${((raceHour % 1) * 60).toString().padStart(2, '0')}`;
+        }
+        
+        raceSlot.className = slotClass;
+        raceSlot.innerHTML = `
+            <div class="race-number">${i}R</div>
+            <div class="race-schedule">${timeText}</div>
+        `;
+        
+        // 未来のレースにクリックイベント
+        if (i >= currentRace) {
+            raceSlot.addEventListener('click', function() {
+                selectRace(venueCode, i, venueName);
+            });
+        }
+        
+        raceTimeline.appendChild(raceSlot);
+    }
+    
+    // パネル表示
+    detailPanel.classList.add('active');
+    detailPanel.scrollIntoView({ behavior: 'smooth' });
+}
+
+/**
+ * レース選択
+ */
+function selectRace(venueCode, raceNumber, venueName) {
+    currentSelectedRace = raceNumber;
+    
+    // 選択状態の更新
+    document.querySelectorAll('.race-slot').forEach(slot => {
+        slot.classList.remove('selected');
+    });
+    
+    event.target.closest('.race-slot').classList.add('selected');
+    
+    // 出走表データ取得
+    loadSelectedRaceData(venueCode, raceNumber, venueName);
+}
+
+/**
+ * 選択されたレースのデータ取得
+ */
+async function loadSelectedRaceData(venueCode = currentSelectedVenue, raceNumber = currentSelectedRace, venueName = '') {
+    if (!venueCode || !raceNumber) {
+        console.log('会場またはレースが選択されていません');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${boatraceAPI.baseUrl}/race-data?venue=${venueCode}&race=${raceNumber}`);
+        const data = await response.json();
+        
+        if (data.racer_extraction && data.racer_extraction.racers) {
+            // レース情報表示
+            showRaceInfo(venueCode, raceNumber, venueName || data.race_info?.venue_name);
+            
+            // 選手データ表示
+            displayRealRacers(data.racer_extraction.racers);
+            
+            // AI予想取得
+            await loadAIPrediction();
+        }
+    } catch (error) {
+        console.error('レースデータ取得エラー:', error);
+        showRaceError('レースデータの取得に失敗しました');
+    }
+}
+
+/**
+ * レース情報表示
+ */
+function showRaceInfo(venueCode, raceNumber, venueName) {
+    const raceInfo = document.getElementById('race-info');
+    const predictionContainer = document.getElementById('prediction-container');
+    const raceTitle = document.getElementById('race-title');
+    const venueNameElement = document.getElementById('venue-name');
+    const raceNumberElement = document.getElementById('race-number');
+    const dataStatusElement = document.getElementById('data-status');
+    
+    if (raceInfo) raceInfo.style.display = 'block';
+    if (predictionContainer) predictionContainer.style.display = 'block';
+    
+    if (raceTitle) raceTitle.textContent = `${venueName || '競艇場'} 第${raceNumber}レース`;
+    if (venueNameElement) venueNameElement.textContent = venueName || '競艇場';
+    if (raceNumberElement) raceNumberElement.textContent = `${raceNumber}R`;
+    if (dataStatusElement) dataStatusElement.textContent = 'データ取得成功';
+    
+    // タイムスタンプ更新
+    updateTimestamp(new Date().toISOString());
+}
+
+/**
+ * 詳細パネルを閉じる
+ */
+function closeDetail() {
+    const detailPanel = document.getElementById('detail-panel');
+    if (detailPanel) {
+        detailPanel.classList.remove('active');
+    }
+}
+
+/**
+ * エラー表示
+ */
+function showVenueError(message) {
+    const loading = document.getElementById('loading');
+    const error = document.getElementById('error');
+    const errorMessage = document.getElementById('error-message');
+    const statusIndicator = document.getElementById('status-indicator');
+    
+    if (loading) loading.style.display = 'none';
+    if (error) error.style.display = 'block';
+    if (errorMessage) errorMessage.textContent = message;
+    if (statusIndicator) {
+        statusIndicator.className = 'status-indicator status-error';
+        statusIndicator.innerHTML = '<i class="fas fa-exclamation-triangle"></i> エラー';
+    }
+}
+
+function showRaceError(message) {
+    alert(message); // 簡易実装
+}
+
+/**
+ * 既存のinitApp関数を更新
+ */
+const originalInitApp = initApp;
+async function initApp() {
+    await loadVenues(); // 新しいUI版を使用
+    await loadAIPrediction();
+    await updatePerformanceStats();
+    
+    // 定期更新
+    setInterval(async () => {
+        if (currentSelectedVenue && currentSelectedRace) {
+            await loadSelectedRaceData();
+            await loadAIPrediction();
+        }
+    }, 5 * 60 * 1000);
+}
