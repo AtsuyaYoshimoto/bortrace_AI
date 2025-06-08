@@ -879,11 +879,6 @@ function selectVenue(venueCode, venueName) {
     showVenueDetail(venueCode, venueName);
 }
     
-    // パネル表示
-    detailPanel.classList.add('active');
-    detailPanel.scrollIntoView({ behavior: 'smooth' });
-}
-
 /**
  * レース選択
  */
