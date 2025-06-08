@@ -602,6 +602,161 @@ import threading
 #scheduler_thread.start()
 #logger.info("データ収集スケジューラー開始")
 
+@app.route('/api/venue-status', methods=['GET'])
+def get_venue_status():
+    """全競艇場の開催状況を取得"""
+    try:
+        today = datetime.now().strftime("%Y%m%d")
+        venue_status = {}
+        
+        # 全24会場の開催状況をチェック
+        venues_list = [
+            ("01", "桐生"), ("02", "戸田"), ("03", "江戸川"), ("04", "平和島"), ("05", "多摩川"),
+            ("06", "浜名湖"), ("07", "蒲郡"), ("08", "常滑"), ("09", "津"), ("10", "三国"),
+            ("11", "びわこ"), ("12", "住之江"), ("13", "尼崎"), ("14", "鳴門"), ("15", "丸亀"),
+            ("16", "児島"), ("17", "宮島"), ("18", "徳山"), ("19", "下関"), ("20", "若松"),
+            ("21", "芦屋"), ("22", "福岡"), ("23", "唐津"), ("24", "大村")
+        ]
+        
+        for venue_code, venue_name in venues_list:
+            # 簡易的な開催判定（実際にはスクレイピングでチェック）
+            is_active = check_venue_active(venue_code, today)
+            
+            if is_active:
+                # 現在時刻からレース状況を推定
+                current_hour = datetime.now().hour
+                current_minute = datetime.now().minute
+                
+                if current_hour < 12:
+                    current_race = 1
+                    status = "upcoming"
+                elif current_hour >= 17:
+                    current_race = 12
+                    status = "finished"
+                else:
+                    # 12時から30分間隔でレース進行
+                    elapsed_minutes = (current_hour - 12) * 60 + current_minute
+                    current_race = min(12, max(1, elapsed_minutes // 30 + 1))
+                    status = "active"
+                
+                # 次のレース時刻計算
+                next_race_minutes = 12 * 60 + current_race * 30
+                next_hour = next_race_minutes // 60
+                next_minute = next_race_minutes % 60
+                
+                venue_status[venue_code] = {
+                    "is_active": True,
+                    "venue_name": venue_name,
+                    "current_race": current_race,
+                    "status": status,
+                    "current_time": f"{current_hour}:{current_minute:02d}〜",
+                    "next_race": f"第{current_race + 1}R {next_hour}:{next_minute:02d}発走" if current_race < 12 else "本日終了",
+                    "remaining_races": max(0, 12 - current_race),
+                    "total_races": 12,
+                    "last_race_time": "17:30"
+                }
+            else:
+                venue_status[venue_code] = {
+                    "is_active": False,
+                    "venue_name": venue_name,
+                    "current_race": None,
+                    "status": "no_races",
+                    "current_time": "本日開催なし",
+                    "next_race": "調査中",
+                    "remaining_races": 0,
+                    "total_races": 0,
+                    "last_race_time": None
+                }
+        
+        return jsonify({
+            "date": today,
+            "venue_status": venue_status,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+def check_venue_active(venue_code, date_str):
+    """会場が開催中かチェック（簡易版）"""
+    try:
+        # 実際のスクレイピングは負荷が高いので、ランダムに開催判定
+        # 本番では実際にboatrace.jpをチェック
+        
+        # 一部会場を常にアクティブとして仮実装
+        active_venues = ['01', '12', '20', '22', '24']  # 桐生、住之江、若松、福岡、大村
+        
+        # 曜日による判定も追加
+        weekday = datetime.now().weekday()
+        if weekday in [0, 1, 5, 6]:  # 月火土日
+            additional_active = ['06', '13', '16']  # 浜名湖、尼崎、児島
+            active_venues.extend(additional_active)
+        
+        return venue_code in active_venues
+        
+    except Exception as e:
+        print(f"開催チェックエラー: {venue_code}, {e}")
+        return False
+
+@app.route('/api/venue-schedule/<venue_code>', methods=['GET'])
+def get_venue_schedule(venue_code):
+    """指定会場の詳細スケジュール取得"""
+    try:
+        today = datetime.now().strftime("%Y%m%d")
+        schedule = []
+        
+        # 開催チェック
+        is_active = check_venue_active(venue_code, today)
+        
+        if not is_active:
+            return jsonify({
+                "venue_code": venue_code,
+                "date": today,
+                "is_active": False,
+                "schedule": [],
+                "message": "本日は開催されていません"
+            })
+        
+        # 1R-12Rの詳細スケジュール生成
+        current_time = datetime.now()
+        
+        for race_num in range(1, 13):
+            # 12:00から30分間隔でレース設定
+            race_time_minutes = 12 * 60 + (race_num - 1) * 30
+            race_hour = race_time_minutes // 60
+            race_minute = race_time_minutes % 60
+            
+            race_info = {
+                "race_number": race_num,
+                "scheduled_time": f"{race_hour}:{race_minute:02d}",
+                "status": "upcoming"
+            }
+            
+            # 現在時刻と比較してステータス決定
+            current_minutes = current_time.hour * 60 + current_time.minute
+            race_start_minutes = race_time_minutes
+            race_end_minutes = race_time_minutes + 25  # レース時間約25分
+            
+            if current_minutes > race_end_minutes:
+                race_info["status"] = "completed"
+            elif current_minutes >= race_start_minutes:
+                race_info["status"] = "live"
+            else:
+                race_info["status"] = "upcoming"
+            
+            schedule.append(race_info)
+        
+        return jsonify({
+            "venue_code": venue_code,
+            "date": today,
+            "is_active": True,
+            "schedule": schedule,
+            "timestamp": current_time.isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
