@@ -980,8 +980,8 @@ function showRaceError(message) {
     alert(message); // 簡易実装
 }
 
- * showVenueDetail関数を実API版に置き換え
- */
+ //showVenueDetail関数を実API版に置き換え
+ 
 async function showVenueDetail(venueCode, venueName) {
     const detailPanel = document.getElementById('detail-panel');
     const detailTitle = document.getElementById('detail-title');
