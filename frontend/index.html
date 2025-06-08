@@ -859,9 +859,9 @@
         </div>
     </section>
 
-    <section class="predictions" id="predictions">
+<section class="predictions" id="predictions">
         <div class="container">
-            <h2 class="section-title">🏁 リアルタイム出走表</h2>
+            <h2 class="section-title">🏁 今日の開催状況</h2>
             
             <!-- データ状況表示 -->
             <div class="data-status">
@@ -870,9 +870,19 @@
                 </span>
             </div>
 
+            <!-- 地域別フィルター -->
+            <div class="region-filter">
+                <button class="region-btn active" data-region="all">全会場</button>
+                <button class="region-btn" data-region="関東">関東</button>
+                <button class="region-btn" data-region="中部">中部</button>
+                <button class="region-btn" data-region="関西">関西</button>
+                <button class="region-btn" data-region="中国・四国">中国・四国</button>
+                <button class="region-btn" data-region="九州">九州</button>
+            </div>
+
             <!-- Loading State -->
             <div id="loading" class="loading">
-                <p><i class="fas fa-satellite-dish"></i> 最新の出走表データを取得中...</p>
+                <p><i class="fas fa-satellite-dish"></i> 最新の開催情報を取得中...</p>
             </div>
 
             <!-- Error State -->
@@ -882,46 +892,43 @@
                 <button class="btn" onclick="initApp()">再試行</button>
             </div>
 
-            <!-- Race Info -->
-            <div id="race-info" class="race-info" style="display: none;">
-                <!-- 会場選択UI（カード型） -->
-                <div class="venue-race-selector">
-                    <div class="venue-grid" id="venue-grid">
-                        <!-- 競技場カードが動的に挿入される -->
-                    </div>
-                    
-                    <div class="race-selector" id="race-selector" style="display: none;">
-                        <h4>レース選択</h4>
-                        <div class="race-buttons" id="race-buttons">
-                            <!-- レースボタンが動的に挿入される -->
-                        </div>
-                    </div>
-                    
-                    <div class="selected-info" id="selected-info">
-                        <span id="selected-venue-name">会場を選択してください</span>
-                        <span id="selected-race-info"></span>
-                    </div>
+            <!-- 開催状況グリッド -->
+            <div class="venue-status-grid" id="venue-grid" style="display: none;">
+                <!-- 競艇場カードが動的に挿入される -->
+            </div>
+
+            <!-- 詳細情報パネル -->
+            <div class="venue-detail-panel" id="detail-panel">
+                <div class="detail-header">
+                    <div class="detail-title" id="detail-title">競艇場詳細情報</div>
+                    <button class="close-detail" onclick="closeDetail()">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
                 
+                <div class="race-timeline" id="race-timeline">
+                    <!-- レースタイムラインが動的に挿入される -->
+                </div>
+            </div>
+
+            <!-- 選手表示エリア（選択時に表示） -->
+            <div id="race-info" class="race-info" style="display: none;">
                 <div class="race-header">
-                    <h3 id="race-title">桐生競艇 第1レース</h3>
-                    <span id="race-date">2025年05月26日</span>
+                    <h3 id="race-title">レース選択</h3>
+                    <span id="race-date"></span>
                 </div>
                 <div class="race-details">
                     <div class="detail-box">
-                        <i class="fas fa-map-marker-alt"></i> <span id="venue-name">桐生競艇場</span>
+                        <i class="fas fa-map-marker-alt"></i> <span id="venue-name">会場名</span>
                     </div>
                     <div class="detail-box">
-                        <i class="fas fa-trophy"></i> レース番号: <span id="race-number">1R</span>
+                        <i class="fas fa-trophy"></i> レース番号: <span id="race-number">-R</span>
                     </div>
                     <div class="detail-box">
                         <i class="fas fa-clock"></i> 最終更新: <span id="last-updated">--:--:--</span>
                     </div>
-                    <div class="ai-status">
-                        <span id="ai-last-updated">最終更新: --:--:--</span>
-                    </div>
                     <div class="detail-box">
-                        <i class="fas fa-database"></i> データ取得成功
+                        <i class="fas fa-database"></i> <span id="data-status">データ取得中</span>
                     </div>
                 </div>
             </div>
@@ -947,7 +954,7 @@
                 </table>
 
                 <div class="update-controls">
-                    <button class="btn btn-primary" onclick="loadTodayRaces()">
+                    <button class="btn btn-primary" onclick="loadSelectedRaceData()">
                         <i class="fas fa-sync-alt"></i> データ更新
                     </button>
                     <div class="last-updated">
