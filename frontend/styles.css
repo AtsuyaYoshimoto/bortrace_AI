@@ -417,12 +417,34 @@ nav a:hover {
     50% { box-shadow: 0 6px 20px rgba(255, 107, 107, 0.6); }
 }
 
+/* 選択情報表示 - 競艇アプリ風 */
 .selected-info {
-    padding: 1rem;
-    background: var(--primary);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
     color: white;
-    border-radius: 6px;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 6px 20px rgba(0, 102, 204, 0.2);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.selected-venue, .selected-race {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     font-weight: 600;
+    font-size: 1rem;
+}
+
+.selected-venue i, .selected-race i {
+    font-size: 1.1rem;
+    opacity: 0.9;
+}
+
+.selected-venue span, .selected-race span {
+    opacity: 0.95;
 }
 
 .race-header {
@@ -1317,4 +1339,47 @@ footer {
 @keyframes pulse {
     0%, 100% { transform: scale(1); opacity: 0.8; }
     50% { transform: scale(1.1); opacity: 1; }
+}
+
+/* データ状況表示の改善 */
+.data-status {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding: 1rem;
+}
+
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.8rem 1.5rem;
+    border-radius: 25px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.status-success {
+    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+    color: #155724;
+    border: 2px solid #b8dacc;
+}
+
+.status-loading {
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+    color: #856404;
+    border: 2px solid #f5e050;
+    animation: pulse-yellow 2s infinite;
+}
+
+.status-error {
+    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+    color: #721c24;
+    border: 2px solid #f1aeb5;
+}
+
+@keyframes pulse-yellow {
+    0%, 100% { box-shadow: 0 4px 12px rgba(245, 224, 80, 0.3); }
+    50% { box-shadow: 0 4px 12px rgba(245, 224, 80, 0.6); }
 }
