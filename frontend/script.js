@@ -433,6 +433,7 @@ let selectedVenue = null;
 let selectedRace = null;
 
 // 既存のloadVenues関数を置き換え
+// 既存のloadVenues関数を置き換え
 async function loadVenues() {
     try {
         const venues = await boatraceAPI.getVenues();
@@ -440,15 +441,57 @@ async function loadVenues() {
         
         venueGrid.innerHTML = '';
         
+        // 会場開催状況も取得
+        const venueStatus = await getVenueStatus();
+        
         for (const [code, venueData] of Object.entries(venues)) {
             const venueCard = document.createElement('div');
             venueCard.className = 'venue-card';
-            venueCard.textContent = venueData.name;
-            venueCard.onclick = () => selectVenue(code, venueData.name);
+            
+            // 開催状況に応じてクラス設定
+            const status = venueStatus[code];
+            if (status && status.is_active) {
+                venueCard.classList.add('active');
+            } else {
+                venueCard.classList.add('inactive');
+            }
+            
+            // 開催状況インジケーター追加
+            const statusDot = document.createElement('div');
+            statusDot.className = 'venue-status';
+            statusDot.classList.add(status && status.is_active ? 'active' : 'inactive');
+            
+            venueCard.innerHTML = `
+                ${venueData.name}
+                <small style="font-size: 0.8rem; opacity: 0.8; margin-top: 4px;">
+                    ${status && status.is_active ? `${status.remaining_races}R残` : '開催なし'}
+                </small>
+            `;
+            
+            venueCard.appendChild(statusDot);
+            
+            // クリックイベント（開催中のみ）
+            if (status && status.is_active) {
+                venueCard.onclick = () => selectVenue(code, venueData.name);
+            }
+            
             venueGrid.appendChild(venueCard);
         }
     } catch (error) {
         console.error('会場一覧取得エラー:', error);
+    }
+}
+
+// 会場開催状況取得関数を追加
+async function getVenueStatus() {
+    try {
+        const response = await fetch(`${boatraceAPI.baseUrl}/venue-status`);
+        if (!response.ok) throw new Error('会場状況取得失敗');
+        const data = await response.json();
+        return data.venue_status || {};
+    } catch (error) {
+        console.error('会場状況取得エラー:', error);
+        return {};
     }
 }
 
