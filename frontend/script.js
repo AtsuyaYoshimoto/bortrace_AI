@@ -433,7 +433,6 @@ let selectedVenue = null;
 let selectedRace = null;
 
 // 既存のloadVenues関数を置き換え
-// 既存のloadVenues関数を置き換え
 async function loadVenues() {
     try {
         const venues = await boatraceAPI.getVenues();
@@ -456,19 +455,19 @@ async function loadVenues() {
                 venueCard.classList.add('inactive');
             }
             
-            // 開催状況インジケーター追加
-            const statusDot = document.createElement('div');
-            statusDot.className = 'venue-status';
-            statusDot.classList.add(status && status.is_active ? 'active' : 'inactive');
-            
             venueCard.innerHTML = `
-                ${venueData.name}
-                <small style="font-size: 0.8rem; opacity: 0.8; margin-top: 4px;">
-                    ${status && status.is_active ? `${status.remaining_races}R残` : '開催なし'}
-                </small>
+                <div class="venue-status-indicator ${status && status.is_active ? 'live' : 'closed'}">
+                    ${status && status.is_active ? 'LIVE' : '休場'}
+                </div>
+                <div class="venue-name">${venueData.name}</div>
+                <div class="venue-location">${venueData.location}</div>
+                <div class="venue-race-status">
+                    ${status && status.is_active ? 
+                        `残り${status.remaining_races}レース` : 
+                        '本日開催なし'
+                    }
+                </div>
             `;
-            
-            venueCard.appendChild(statusDot);
             
             // クリックイベント（開催中のみ）
             if (status && status.is_active) {
