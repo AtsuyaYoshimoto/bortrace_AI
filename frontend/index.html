@@ -885,21 +885,34 @@
             <!-- Race Info -->
             <div id="race-info" class="race-info" style="display: none;">
                 <!-- 会場選択UI（カード型） -->
+                <!-- 会場選択UI（カード型） を以下に置き換え -->
                 <div class="venue-race-selector">
+                    <h3 class="selector-title">
+                        <i class="fas fa-map-marker-alt"></i> 競艇場選択
+                    </h3>
+                    
                     <div class="venue-grid" id="venue-grid">
                         <!-- 競技場カードが動的に挿入される -->
                     </div>
                     
                     <div class="race-selector" id="race-selector" style="display: none;">
-                        <h4>レース選択</h4>
+                        <h4 class="selector-subtitle">
+                            <i class="fas fa-flag-checkered"></i> レース選択
+                        </h4>
                         <div class="race-buttons" id="race-buttons">
                             <!-- レースボタンが動的に挿入される -->
                         </div>
                     </div>
                     
                     <div class="selected-info" id="selected-info">
-                        <span id="selected-venue-name">会場を選択してください</span>
-                        <span id="selected-race-info"></span>
+                        <div class="selected-venue">
+                            <i class="fas fa-location-dot"></i>
+                            <span id="selected-venue-name">会場を選択してください</span>
+                        </div>
+                        <div class="selected-race">
+                            <i class="fas fa-trophy"></i>
+                            <span id="selected-race-info">レースを選択してください</span>
+                        </div>
                     </div>
                 </div>
                 
