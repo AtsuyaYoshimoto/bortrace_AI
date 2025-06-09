@@ -512,12 +512,58 @@ function selectVenue(venueCode, venueName) {
     document.getElementById('selected-race-info').textContent = '';
 }
 
-function showRaceSelector() {
+async function showRaceSelector() {
     const raceSelector = document.getElementById('race-selector');
     const raceButtons = document.getElementById('race-buttons');
     
     raceSelector.style.display = 'block';
     raceButtons.innerHTML = '';
+    
+    try {
+        // 実際のレーススケジュールを取得
+        const schedule = await getVenueSchedule(selectedVenue);
+        
+        if (schedule && schedule.schedule && schedule.schedule.length > 0) {
+            // 実際のスケジュールを使用
+            schedule.schedule.forEach((race, index) => {
+                const raceBtn = document.createElement('button');
+                raceBtn.className = 'race-btn';
+                raceBtn.classList.add(race.status); // completed, live, upcoming
+                
+                raceBtn.innerHTML = `
+                    <div>${race.race_number}R</div>
+                    <div class="race-time">${race.scheduled_time}</div>
+                `;
+                
+                raceBtn.onclick = () => selectRace(race.race_number);
+                raceButtons.appendChild(raceBtn);
+            });
+        } else {
+            // APIが利用できない場合のフォールバック
+            createFallbackRaceButtons();
+        }
+    } catch (error) {
+        console.error('レーススケジュール取得エラー:', error);
+        // エラー時のフォールバック
+        createFallbackRaceButtons();
+    }
+}
+
+// 実際のレーススケジュール取得関数
+async function getVenueSchedule(venueCode) {
+    try {
+        const response = await fetch(`${boatraceAPI.baseUrl}/venue-schedule/${venueCode}`);
+        if (!response.ok) throw new Error('スケジュール取得失敗');
+        return await response.json();
+    } catch (error) {
+        console.error('スケジュール取得エラー:', error);
+        return null;
+    }
+}
+
+// フォールバック用レースボタン作成
+function createFallbackRaceButtons() {
+    const raceButtons = document.getElementById('race-buttons');
     
     // 現在時刻を取得
     const now = new Date();
@@ -525,19 +571,23 @@ function showRaceSelector() {
     const currentMinute = now.getMinutes();
     const currentTime = currentHour * 60 + currentMinute;
     
-    // 1R〜12Rのボタン作成（12:00から30分間隔）
+    // 一般的な競艇の時間（10:30から約30分間隔）
+    const raceStartTimes = [
+        '10:30', '11:00', '11:30', '12:00', '12:30', '13:00',
+        '13:30', '14:00', '14:30', '15:00', '15:30', '16:00'
+    ];
+    
     for (let i = 1; i <= 12; i++) {
         const raceBtn = document.createElement('button');
         raceBtn.className = 'race-btn';
         
-        // レース開始時刻計算（12:00から30分間隔）
-        const raceStartMinutes = 12 * 60 + (i - 1) * 30;
-        const raceEndMinutes = raceStartMinutes + 25; // レース時間約25分
-        const raceHour = Math.floor(raceStartMinutes / 60);
-        const raceMinute = raceStartMinutes % 60;
-        const timeStr = `${raceHour}:${raceMinute.toString().padStart(2, '0')}`;
+        const timeStr = raceStartTimes[i-1] || `${9 + i}:00`;
         
-        // レース状況を判定
+        // 簡易的な状況判定
+        const [hour, minute] = timeStr.split(':').map(Number);
+        const raceStartMinutes = hour * 60 + minute;
+        const raceEndMinutes = raceStartMinutes + 25;
+        
         let status = 'upcoming';
         if (currentTime > raceEndMinutes) {
             status = 'completed';
@@ -545,18 +595,13 @@ function showRaceSelector() {
             status = 'live';
         }
         
-        // ボタンにクラス追加
         raceBtn.classList.add(status);
-        
-        // ボタン内容
         raceBtn.innerHTML = `
             <div>${i}R</div>
             <div class="race-time">${timeStr}</div>
         `;
         
-        // クリックイベント
         raceBtn.onclick = () => selectRace(i);
-        
         raceButtons.appendChild(raceBtn);
     }
 }
