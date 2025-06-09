@@ -520,12 +520,44 @@ function showRaceSelector() {
     raceSelector.style.display = 'block';
     raceButtons.innerHTML = '';
     
-    // 1R〜12Rのボタン作成
+    // 現在時刻を取得
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentTime = currentHour * 60 + currentMinute;
+    
+    // 1R〜12Rのボタン作成（12:00から30分間隔）
     for (let i = 1; i <= 12; i++) {
         const raceBtn = document.createElement('button');
         raceBtn.className = 'race-btn';
-        raceBtn.textContent = `${i}R`;
+        
+        // レース開始時刻計算（12:00から30分間隔）
+        const raceStartMinutes = 12 * 60 + (i - 1) * 30;
+        const raceEndMinutes = raceStartMinutes + 25; // レース時間約25分
+        const raceHour = Math.floor(raceStartMinutes / 60);
+        const raceMinute = raceStartMinutes % 60;
+        const timeStr = `${raceHour}:${raceMinute.toString().padStart(2, '0')}`;
+        
+        // レース状況を判定
+        let status = 'upcoming';
+        if (currentTime > raceEndMinutes) {
+            status = 'completed';
+        } else if (currentTime >= raceStartMinutes && currentTime <= raceEndMinutes) {
+            status = 'live';
+        }
+        
+        // ボタンにクラス追加
+        raceBtn.classList.add(status);
+        
+        // ボタン内容
+        raceBtn.innerHTML = `
+            <div>${i}R</div>
+            <div class="race-time">${timeStr}</div>
+        `;
+        
+        // クリックイベント
         raceBtn.onclick = () => selectRace(i);
+        
         raceButtons.appendChild(raceBtn);
     }
 }
