@@ -346,31 +346,75 @@ nav a:hover {
     background-color: #dc3545;
 }
 
+/* レース選択ボタン - 競艇アプリ風 */
 .race-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 0.8rem;
+    margin-bottom: 1.5rem;
 }
 
 .race-btn {
-    padding: 0.5rem 1rem;
+    position: relative;
+    padding: 1rem 0.5rem;
     background: white;
-    border: 2px solid #ddd;
-    border-radius: 20px;
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: all 0.3s ease;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.9rem;
+    min-height: 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.04);
 }
 
-.race-btn:hover {
-    border-color: var(--primary);
-    background-color: #f0f5ff;
+.race-btn.completed {
+    background: #f8f9fa;
+    color: #6c757d;
+    border-color: #dee2e6;
+}
+
+.race-btn.live {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+    color: white;
+    border-color: #ff6b6b;
+    animation: pulse-red 2s infinite;
+}
+
+.race-btn.upcoming {
+    background: white;
+    color: var(--primary-dark);
+    border-color: #e9ecef;
 }
 
 .race-btn.selected {
-    border-color: var(--primary);
-    background-color: var(--primary);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
     color: white;
+    border-color: var(--primary);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 102, 204, 0.3);
+}
+
+.race-btn:hover:not(.selected) {
+    border-color: var(--primary-light);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+.race-time {
+    font-size: 0.75rem;
+    opacity: 0.8;
+    margin-top: 2px;
+}
+
+@keyframes pulse-red {
+    0%, 100% { box-shadow: 0 6px 20px rgba(255, 107, 107, 0.3); }
+    50% { box-shadow: 0 6px 20px rgba(255, 107, 107, 0.6); }
 }
 
 .selected-info {
