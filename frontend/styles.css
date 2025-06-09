@@ -248,43 +248,102 @@ nav a:hover {
     overflow: hidden;
 }
 
-/* 会場・レース選択UI */
+/* 会場・レース選択UI - 競艇アプリ風 */
 .venue-race-selector {
-    padding: 1.5rem;
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #e0e0e0;
+    padding: 2rem;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 12px;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+
+.selector-title, .selector-subtitle {
+    color: var(--primary-dark);
+    margin-bottom: 1.5rem;
+    font-size: 1.3rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.selector-subtitle {
+    font-size: 1.1rem;
+    margin-top: 2rem;
 }
 
 .venue-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 1rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: 2rem;
 }
 
 .venue-card {
-    padding: 0.8rem;
+    position: relative;
+    padding: 1.2rem 0.8rem;
     background: white;
-    border: 2px solid #ddd;
-    border-radius: 8px;
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
     text-align: center;
     cursor: pointer;
-    transition: all 0.3s;
-    min-height: 60px;
+    transition: all 0.3s ease;
+    min-height: 80px;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    font-weight: 600;
+    font-size: 0.95rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
-.venue-card:hover {
-    border-color: var(--primary);
-    background-color: #f0f5ff;
+.venue-card.active {
+    background: linear-gradient(135deg, var(--success) 0%, #20c997 100%);
+    color: white;
+    border-color: var(--success);
+    box-shadow: 0 4px 16px rgba(40, 167, 69, 0.3);
+}
+
+.venue-card.inactive {
+    background: #f8f9fa;
+    color: #6c757d;
+    border-color: #dee2e6;
+    cursor: not-allowed;
+    opacity: 0.6;
 }
 
 .venue-card.selected {
-    border-color: var(--primary);
-    background-color: var(--primary);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
     color: white;
+    border-color: var(--primary);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 102, 204, 0.3);
+}
+
+.venue-card:hover:not(.inactive):not(.selected) {
+    border-color: var(--primary-light);
+    background-color: #f0f5ff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+.venue-status {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.venue-status.active {
+    background-color: #28a745;
+    box-shadow: 0 0 6px rgba(40, 167, 69, 0.6);
+}
+
+.venue-status.inactive {
+    background-color: #dc3545;
 }
 
 .race-buttons {
