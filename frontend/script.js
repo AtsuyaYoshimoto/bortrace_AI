@@ -445,102 +445,114 @@ function initEventListeners() {
 let selectedVenue = null;
 let selectedRace = null;
 
-// 既存のloadVenues関数を完全に置き換え
-async function loadVenues() {
+// APIベースの正確な実装
+async function loadAccurateVenueData() {
     try {
-        console.log('会場一覧とAPIデータを取得中...');
+        console.log('=== 正確な競艇データ取得 ===');
         
-        const venues = await boatraceAPI.getVenues();
+        const [venuesResponse, statusResponse] = await Promise.all([
+            fetch(`${boatraceAPI.baseUrl}/venues`),
+            fetch(`${boatraceAPI.baseUrl}/venue-status`)
+        ]);
+        
+        const venues = await venuesResponse.json();
+        const venueStatusData = await statusResponse.json();
+        
         const venueGrid = document.getElementById('venue-grid');
-        
-        if (!venueGrid) {
-            console.error('venue-grid要素が見つかりません');
-            return;
-        }
-        
         venueGrid.innerHTML = '';
         
-        // APIサーバーから会場開催状況を取得
-        const venueStatus = await getVenueStatus();
-        console.log('取得した会場状況:', venueStatus);
-        
-        for (const [code, venueData] of Object.entries(venues)) {
+        Object.entries(venues).forEach(([code, venueData]) => {
+            const status = venueStatusData.venue_status?.[code];
+            
             const venueCard = document.createElement('div');
             venueCard.className = 'venue-card';
             
-            // APIから取得した開催状況をチェック
-            const status = venueStatus[code];
-            console.log(`会場${code}(${venueData.name})の状況:`, status);
-            
-            if (status && status.is_active) {
+            if (status?.is_active) {
                 venueCard.classList.add('active');
-                console.log(`${venueData.name}は開催中`);
+                
+                // 現在の状況を判定
+                let currentStatus = 'レース中';
+                let raceInfo = '';
+                
+                if (status.status === 'live') {
+                    currentStatus = 'LIVE';
+                    raceInfo = `${status.current_race || ''}R進行中 (残り${status.remaining_races || 0}R)`;
+                } else if (status.remaining_races === 0) {
+                    currentStatus = '終了';
+                    raceInfo = '本日終了';
+                } else {
+                    raceInfo = `残り${status.remaining_races}R`;
+                }
+                
+                venueCard.innerHTML = `
+                    <div class="venue-status-indicator live">${currentStatus}</div>
+                    <div class="venue-name">${venueData.name}</div>
+                    <div class="venue-location">${venueData.location}</div>
+                    <div class="venue-race-status">${raceInfo}</div>
+                `;
+                
+                venueCard.onclick = () => selectVenue(code, venueData.name);
             } else {
                 venueCard.classList.add('inactive');
-                console.log(`${venueData.name}は休場`);
-            }
-            
-            // 開催状況の表示内容を決定
-            let statusIndicator = '';
-            let raceInfo = '';
-            
-            if (status && status.is_active) {
-                statusIndicator = '<div class="venue-status-indicator live">LIVE</div>';
-                raceInfo = `残り${status.remaining_races || 0}レース`;
-            } else {
-                statusIndicator = '<div class="venue-status-indicator closed">休場</div>';
-                raceInfo = '本日開催なし';
-            }
-            
-            // HTMLを生成
-            venueCard.innerHTML = `
-                ${statusIndicator}
-                <div class="venue-name">${venueData.name}</div>
-                <div class="venue-location">${venueData.location}</div>
-                <div class="venue-race-status">${raceInfo}</div>
-            `;
-            
-            // クリックイベント（開催中のみ）
-            if (status && status.is_active) {
-                venueCard.onclick = () => {
-                    console.log(`${venueData.name}を選択`);
-                    selectVenue(code, venueData.name);
-                };
-            } else {
-                venueCard.style.pointerEvents = 'none';
+                venueCard.innerHTML = `
+                    <div class="venue-status-indicator closed">休場</div>
+                    <div class="venue-name">${venueData.name}</div>
+                    <div class="venue-location">${venueData.location}</div>
+                    <div class="venue-race-status">本日開催なし</div>
+                `;
             }
             
             venueGrid.appendChild(venueCard);
-        }
-        
-        console.log('会場カード生成完了');
+        });
         
     } catch (error) {
-        console.error('会場一覧取得エラー:', error);
+        console.error('データ取得エラー:', error);
     }
 }
 
-// 会場開催状況取得関数を修正
-async function getVenueStatus() {
+// レース選択も正確なAPIを使用
+async function showAccurateRaceSelector() {
+    const raceSelector = document.getElementById('race-selector');
+    const raceButtons = document.getElementById('race-buttons');
+    
+    raceSelector.style.display = 'block';
+    raceButtons.innerHTML = '';
+    
     try {
-        console.log('APIサーバーから会場状況を取得中...');
+        const response = await fetch(`${boatraceAPI.baseUrl}/venue-schedule/${selectedVenue}`);
+        const scheduleData = await response.json();
         
-        const response = await fetch(`${boatraceAPI.baseUrl}/venue-status`);
-        if (!response.ok) {
-            throw new Error(`HTTP Error: ${response.status}`);
+        if (scheduleData?.schedule) {
+            scheduleData.schedule.forEach((race) => {
+                const raceBtn = document.createElement('button');
+                raceBtn.className = 'race-btn';
+                raceBtn.classList.add(race.status); // completed, live, upcoming
+                
+                let statusText = '';
+                if (race.status === 'live') statusText = '<div class="race-status">LIVE</div>';
+                if (race.status === 'completed') statusText = '<div class="race-status">終了</div>';
+                
+                raceBtn.innerHTML = `
+                    <div>${race.race_number}R</div>
+                    <div class="race-time">${race.scheduled_time}</div>
+                    ${statusText}
+                `;
+                
+                raceBtn.onclick = () => selectRace(race.race_number);
+                raceButtons.appendChild(raceBtn);
+            });
         }
-        
-        const data = await response.json();
-        console.log('取得した会場状況:', data);
-        
-        return data.venue_status || {};
-        
     } catch (error) {
-        console.error('APIサーバーから会場状況取得エラー:', error);
-        
-        // APIが失敗した場合のみフォールバック
-        return await getFallbackVenueStatus();
+        console.error('スケジュール取得エラー:', error);
     }
+}
+
+async function loadVenues() {
+    await loadAccurateVenueData();
+}
+
+async function showRaceSelector() {
+    await showAccurateRaceSelector();
 }
 
 async function getFallbackVenueStatus() {
