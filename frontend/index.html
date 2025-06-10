@@ -387,6 +387,95 @@
             color: var(--primary-dark);
         }
 
+                /* 会場・レース選択UI - 競艇アプリ風 */
+        .venue-race-selector {
+            padding: 2rem;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        
+        .selector-title, .selector-subtitle {
+            color: var(--primary-dark);
+            margin-bottom: 1.5rem;
+            font-size: 1.3rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .venue-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .venue-card {
+            position: relative;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            border: 1px solid #e9ecef;
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .venue-card.active {
+            border-color: var(--success);
+            box-shadow: 0 4px 20px rgba(40, 167, 69, 0.2);
+        }
+        
+        .venue-status-indicator {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            z-index: 2;
+        }
+        
+        .venue-status-indicator.live {
+            background: linear-gradient(45deg, #ff4757, #ff3838);
+            color: white;
+        }
+        
+        .venue-status-indicator.closed {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .venue-name {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--dark);
+            margin: 16px 12px 4px 12px;
+            text-align: center;
+        }
+        
+        .venue-location {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin: 0 12px 8px 12px;
+            text-align: center;
+        }
+        
+        .venue-race-status {
+            margin-top: auto;
+            padding: 8px 12px 12px 12px;
+            text-align: center;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
         .class-badge {
             display: inline-block;
             padding: 2px 8px;
