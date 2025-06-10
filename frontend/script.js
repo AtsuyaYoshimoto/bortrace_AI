@@ -634,7 +634,7 @@ async function getVenueSchedule(venueCode) {
     }
 }
 
-// フォールバック用レースボタン作成
+// フォールバック用レースボタン作成を修正
 function createFallbackRaceButtons() {
     const raceButtons = document.getElementById('race-buttons');
     
@@ -644,39 +644,50 @@ function createFallbackRaceButtons() {
     const currentMinute = now.getMinutes();
     const currentTime = currentHour * 60 + currentMinute;
     
-    // 一般的な競艇の時間（10:30から約30分間隔）
-    const raceStartTimes = [
-        '10:30', '11:00', '11:30', '12:00', '12:30', '13:00',
-        '13:30', '14:00', '14:30', '15:00', '15:30', '16:00'
+    // 実際の競艇時間（10:30から30分間隔で12レース）
+    const raceSchedule = [
+        { race: 1, time: '10:30' }, { race: 2, time: '11:00' }, { race: 3, time: '11:30' },
+        { race: 4, time: '12:00' }, { race: 5, time: '12:30' }, { race: 6, time: '13:00' },
+        { race: 7, time: '13:30' }, { race: 8, time: '14:00' }, { race: 9, time: '14:30' },
+        { race: 10, time: '15:00' }, { race: 11, time: '15:30' }, { race: 12, time: '16:00' }
     ];
     
-    for (let i = 1; i <= 12; i++) {
+    raceSchedule.forEach(({ race, time }) => {
         const raceBtn = document.createElement('button');
         raceBtn.className = 'race-btn';
         
-        const timeStr = raceStartTimes[i-1] || `${9 + i}:00`;
-        
-        // 簡易的な状況判定
-        const [hour, minute] = timeStr.split(':').map(Number);
+        // 時刻から状況判定
+        const [hour, minute] = time.split(':').map(Number);
         const raceStartMinutes = hour * 60 + minute;
-        const raceEndMinutes = raceStartMinutes + 25;
+        const raceEndMinutes = raceStartMinutes + 25; // レース時間約25分
         
         let status = 'upcoming';
+        let statusText = '';
+        
         if (currentTime > raceEndMinutes) {
             status = 'completed';
+            statusText = '終了';
         } else if (currentTime >= raceStartMinutes && currentTime <= raceEndMinutes) {
             status = 'live';
+            statusText = 'LIVE';
+        } else if (currentTime >= raceStartMinutes - 10) { // 10分前から
+            status = 'upcoming';
+            statusText = '準備中';
+        } else {
+            status = 'upcoming';
+            statusText = '';
         }
         
         raceBtn.classList.add(status);
         raceBtn.innerHTML = `
-            <div>${i}R</div>
-            <div class="race-time">${timeStr}</div>
+            <div>${race}R</div>
+            <div class="race-time">${time}</div>
+            ${statusText ? `<div class="race-status">${statusText}</div>` : ''}
         `;
         
-        raceBtn.onclick = () => selectRace(i);
+        raceBtn.onclick = () => selectRace(race);
         raceButtons.appendChild(raceBtn);
-    }
+    });
 }
 
 function selectRace(raceNumber) {
