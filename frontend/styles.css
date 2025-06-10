@@ -441,6 +441,25 @@ nav a:hover {
     margin-top: 2px;
 }
 
+.race-status {
+    font-size: 0.65rem;
+    font-weight: 700;
+    margin-top: 2px;
+    padding: 1px 4px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.2);
+}
+
+.race-btn.live .race-status {
+    background: rgba(255,255,255,0.3);
+    color: #fff;
+}
+
+.race-btn.completed .race-status {
+    background: rgba(108,117,125,0.3);
+    color: #6c757d;
+}
+
 @keyframes pulse-red {
     0%, 100% { box-shadow: 0 6px 20px rgba(255, 107, 107, 0.3); }
     50% { box-shadow: 0 6px 20px rgba(255, 107, 107, 0.6); }
@@ -1409,6 +1428,25 @@ footer {
     
     .race-time {
         font-size: 0.65rem;
+    }
+
+        .race-status {
+        font-size: 0.65rem;
+        font-weight: 700;
+        margin-top: 2px;
+        padding: 1px 4px;
+        border-radius: 6px;
+        background: rgba(255,255,255,0.2);
+    }
+    
+    .race-btn.live .race-status {
+        background: rgba(255,255,255,0.3);
+        color: #fff;
+    }
+    
+    .race-btn.completed .race-status {
+        background: rgba(108,117,125,0.3);
+        color: #6c757d;
     }
     
     /* 選択情報のモバイル対応 */
