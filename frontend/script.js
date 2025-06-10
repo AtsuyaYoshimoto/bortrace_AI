@@ -75,14 +75,27 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 async function initApp() {
-    await loadVenues(); 
-    await loadRealTimeData();
-    await loadAIPrediction();  // ← この行を追加
-    await updatePerformanceStats();
-    setInterval(async () => {
+    console.log('アプリケーション初期化開始');
+    
+    try {
+        await loadVenues(); 
         await loadRealTimeData();
-        await loadAIPrediction();  // ← この行を追加
-    }, 5 * 60 * 1000);
+        await loadAIPrediction();
+        await updatePerformanceStats();
+        
+        console.log('初期化完了');
+        
+        // 定期更新
+        setInterval(async () => {
+            console.log('定期更新実行');
+            await loadVenues(); // 会場状況も定期更新
+            await loadRealTimeData();
+            await loadAIPrediction();
+        }, 5 * 60 * 1000);
+        
+    } catch (error) {
+        console.error('初期化エラー:', error);
+    }
 }
 
 // 今日のレース情報を読み込む
@@ -432,50 +445,76 @@ function initEventListeners() {
 let selectedVenue = null;
 let selectedRace = null;
 
-// 既存のloadVenues関数を置き換え
+// 既存のloadVenues関数を完全に置き換え
 async function loadVenues() {
     try {
+        console.log('会場一覧とAPIデータを取得中...');
+        
         const venues = await boatraceAPI.getVenues();
         const venueGrid = document.getElementById('venue-grid');
         
+        if (!venueGrid) {
+            console.error('venue-grid要素が見つかりません');
+            return;
+        }
+        
         venueGrid.innerHTML = '';
         
-        // 会場開催状況も取得
+        // APIサーバーから会場開催状況を取得
         const venueStatus = await getVenueStatus();
+        console.log('取得した会場状況:', venueStatus);
         
         for (const [code, venueData] of Object.entries(venues)) {
             const venueCard = document.createElement('div');
             venueCard.className = 'venue-card';
             
-            // 開催状況に応じてクラス設定
+            // APIから取得した開催状況をチェック
             const status = venueStatus[code];
+            console.log(`会場${code}(${venueData.name})の状況:`, status);
+            
             if (status && status.is_active) {
                 venueCard.classList.add('active');
+                console.log(`${venueData.name}は開催中`);
             } else {
                 venueCard.classList.add('inactive');
+                console.log(`${venueData.name}は休場`);
             }
             
+            // 開催状況の表示内容を決定
+            let statusIndicator = '';
+            let raceInfo = '';
+            
+            if (status && status.is_active) {
+                statusIndicator = '<div class="venue-status-indicator live">LIVE</div>';
+                raceInfo = `残り${status.remaining_races || 0}レース`;
+            } else {
+                statusIndicator = '<div class="venue-status-indicator closed">休場</div>';
+                raceInfo = '本日開催なし';
+            }
+            
+            // HTMLを生成
             venueCard.innerHTML = `
-                <div class="venue-status-indicator ${status && status.is_active ? 'live' : 'closed'}">
-                    ${status && status.is_active ? 'LIVE' : '休場'}
-                </div>
+                ${statusIndicator}
                 <div class="venue-name">${venueData.name}</div>
                 <div class="venue-location">${venueData.location}</div>
-                <div class="venue-race-status">
-                    ${status && status.is_active ? 
-                        `残り${status.remaining_races}レース` : 
-                        '本日開催なし'
-                    }
-                </div>
+                <div class="venue-race-status">${raceInfo}</div>
             `;
             
             // クリックイベント（開催中のみ）
             if (status && status.is_active) {
-                venueCard.onclick = () => selectVenue(code, venueData.name);
+                venueCard.onclick = () => {
+                    console.log(`${venueData.name}を選択`);
+                    selectVenue(code, venueData.name);
+                };
+            } else {
+                venueCard.style.pointerEvents = 'none';
             }
             
             venueGrid.appendChild(venueCard);
         }
+        
+        console.log('会場カード生成完了');
+        
     } catch (error) {
         console.error('会場一覧取得エラー:', error);
     }
