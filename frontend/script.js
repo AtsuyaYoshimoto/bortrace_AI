@@ -484,87 +484,46 @@ async function loadVenues() {
 // 会場開催状況取得関数を修正
 async function getVenueStatus() {
     try {
-        // 現在時刻を取得
-        const now = new Date();
-        const currentHour = now.getHours();
-        const currentMinute = now.getMinutes();
-        const currentTime = currentHour * 60 + currentMinute; // 分に変換
-        const weekday = now.getDay(); // 0:日曜, 1:月曜, ..., 6:土曜
+        console.log('APIサーバーから会場状況を取得中...');
         
-        // 競艇の一般的な開催時間：10:30-16:30
-        const raceStartTime = 10 * 60 + 30; // 10:30
-        const raceEndTime = 16 * 60 + 30;   // 16:30
-        
-        // APIを試行するが、失敗時はローカル判定
-        try {
-            const response = await fetch(`${boatraceAPI.baseUrl}/venue-status`);
-            if (response.ok) {
-                const data = await response.json();
-                return data.venue_status || {};
-            }
-        } catch (error) {
-            console.log('API取得失敗、ローカル判定を使用');
+        const response = await fetch(`${boatraceAPI.baseUrl}/venue-status`);
+        if (!response.ok) {
+            throw new Error(`HTTP Error: ${response.status}`);
         }
         
-        // ローカル判定（実際の開催パターンに基づく）
-        const venueStatus = {};
+        const data = await response.json();
+        console.log('取得した会場状況:', data);
         
-        // 会場コードと名前のマッピング
-        const venues = {
-            '01': '桐生', '02': '戸田', '03': '江戸川', '04': '平和島', '05': '多摩川',
-            '06': '浜名湖', '07': '蒲郡', '08': '常滑', '09': '津', '10': '三国',
-            '11': 'びわこ', '12': '住之江', '13': '尼崎', '14': '鳴門', '15': '丸亀',
-            '16': '児島', '17': '宮島', '18': '徳山', '19': '下関', '20': '若松',
-            '21': '芦屋', '22': '福岡', '23': '唐津', '24': '大村'
-        };
-        
-        // 現在開催中と思われる会場（平日・土日で異なる）
-        let activeVenues = [];
-        
-        if (weekday >= 1 && weekday <= 5) { // 平日
-            activeVenues = ['01', '12', '20', '22']; // 4場開催
-        } else { // 土日
-            activeVenues = ['01', '06', '12', '16', '20', '22', '24']; // 7場開催
-        }
-        
-        // 各会場の状況を判定
-        Object.keys(venues).forEach(code => {
-            const isActiveVenue = activeVenues.includes(code);
-            const isRaceTime = currentTime >= raceStartTime && currentTime <= raceEndTime;
-            const isActive = isActiveVenue && isRaceTime;
-            
-            if (isActive) {
-                // 残りレース数を計算（10:30から30分間隔で12レース）
-                const elapsedMinutes = Math.max(0, currentTime - raceStartTime);
-                const completedRaces = Math.floor(elapsedMinutes / 30);
-                const remainingRaces = Math.max(0, 12 - completedRaces);
-                
-                venueStatus[code] = {
-                    is_active: true,
-                    venue_name: venues[code],
-                    current_race: Math.min(12, completedRaces + 1),
-                    status: remainingRaces > 0 ? "active" : "finished",
-                    remaining_races: remainingRaces,
-                    total_races: 12,
-                    current_time: `${currentHour}:${currentMinute.toString().padStart(2, '0')}`
-                };
-            } else {
-                venueStatus[code] = {
-                    is_active: false,
-                    venue_name: venues[code],
-                    status: "no_races",
-                    remaining_races: 0,
-                    total_races: 0
-                };
-            }
-        });
-        
-        return venueStatus;
+        return data.venue_status || {};
         
     } catch (error) {
-        console.error('会場状況取得エラー:', error);
-        return {};
+        console.error('APIサーバーから会場状況取得エラー:', error);
+        
+        // APIが失敗した場合のみフォールバック
+        return await getFallbackVenueStatus();
     }
+}
+
+async function getFallbackVenueStatus() {
+    console.log('フォールバック: ローカル判定を使用');
+    
+    const venueStatus = {};
+    const venues = {
+        '01': '桐生', '12': '住之江', '20': '若松', '22': '福岡'
+    };
+    
+    // 最小限のフォールバック
+    Object.keys(venues).forEach(code => {
+        venueStatus[code] = {
+            is_active: false,
+            venue_name: venues[code],
+            status: "api_error",
+            remaining_races: 0,
+            message: "データ取得中..."
+        };
+    });
+    
+    return venueStatus;
 }
 
 // 新しい関数追加
@@ -593,31 +552,41 @@ async function showRaceSelector() {
     raceButtons.innerHTML = '';
     
     try {
-        // 実際のレーススケジュールを取得
-        const schedule = await getVenueSchedule(selectedVenue);
+        console.log(`APIサーバーから${selectedVenue}のスケジュールを取得中...`);
         
-        if (schedule && schedule.schedule && schedule.schedule.length > 0) {
-            // 実際のスケジュールを使用
-            schedule.schedule.forEach((race, index) => {
-                const raceBtn = document.createElement('button');
-                raceBtn.className = 'race-btn';
-                raceBtn.classList.add(race.status); // completed, live, upcoming
-                
-                raceBtn.innerHTML = `
-                    <div>${race.race_number}R</div>
-                    <div class="race-time">${race.scheduled_time}</div>
-                `;
-                
-                raceBtn.onclick = () => selectRace(race.race_number);
-                raceButtons.appendChild(raceBtn);
-            });
-        } else {
-            // APIが利用できない場合のフォールバック
-            createFallbackRaceButtons();
+        // 実際のAPIエンドポイントを使用
+        const response = await fetch(`${boatraceAPI.baseUrl}/venue-schedule/${selectedVenue}`);
+        
+        if (response.ok) {
+            const schedule = await response.json();
+            console.log('取得したスケジュール:', schedule);
+            
+            if (schedule && schedule.schedule && schedule.schedule.length > 0) {
+                // APIから取得した実際のスケジュールを使用
+                schedule.schedule.forEach((race) => {
+                    const raceBtn = document.createElement('button');
+                    raceBtn.className = 'race-btn';
+                    raceBtn.classList.add(race.status);
+                    
+                    raceBtn.innerHTML = `
+                        <div>${race.race_number}R</div>
+                        <div class="race-time">${race.scheduled_time}</div>
+                        ${race.status === 'live' ? '<div class="race-status">LIVE</div>' : ''}
+                        ${race.status === 'completed' ? '<div class="race-status">終了</div>' : ''}
+                    `;
+                    
+                    raceBtn.onclick = () => selectRace(race.race_number);
+                    raceButtons.appendChild(raceBtn);
+                });
+                return;
+            }
         }
+        
+        throw new Error('スケジュール取得失敗');
+        
     } catch (error) {
-        console.error('レーススケジュール取得エラー:', error);
-        // エラー時のフォールバック
+        console.error('スケジュール取得エラー:', error);
+        console.log('フォールバックを使用します');
         createFallbackRaceButtons();
     }
 }
