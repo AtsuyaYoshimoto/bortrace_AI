@@ -678,83 +678,101 @@ def get_venue_status():
         return jsonify({"error": str(e)}), 500
 
 def check_venue_active(venue_code, date_str):
-    """会場が開催中かチェック（簡易版）"""
+    """実際の競艇公式サイトから開催状況をチェック"""
     try:
-        # 実際のスクレイピングは負荷が高いので、ランダムに開催判定
-        # 本番では実際にboatrace.jpをチェック
+        import requests
+        from bs4 import BeautifulSoup
+        import time
         
-        # 一部会場を常にアクティブとして仮実装
-        active_venues = ['01', '12', '20', '22', '24']  # 桐生、住之江、若松、福岡、大村
+        # 競艇公式サイトのレース予定ページ
+        url = f"https://boatrace.jp/owpc/pc/race/racelist?jcd={venue_code}&hd={date_str}"
         
-        # 曜日による判定も追加
-        weekday = datetime.now().weekday()
-        if weekday in [0, 1, 5, 6]:  # 月火土日
-            additional_active = ['06', '13', '16']  # 浜名湖、尼崎、児島
-            active_venues.extend(additional_active)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
         
-        return venue_code in active_venues
+        response = requests.get(url, headers=headers, timeout=10)
         
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # レース一覧テーブルが存在するかチェック
+            race_table = soup.find('table', class_='is-w495')
+            if race_table:
+                # レースが見つかった場合は開催中
+                logger.info(f"会場{venue_code}: 開催確認")
+                time.sleep(1)  # サーバー負荷軽減
+                return True
+            else:
+                logger.info(f"会場{venue_code}: 開催なし")
+                return False
+        else:
+            logger.warning(f"会場{venue_code}: データ取得失敗 (status: {response.status_code})")
+            return False
+            
     except Exception as e:
-        print(f"開催チェックエラー: {venue_code}, {e}")
+        logger.error(f"会場{venue_code}: チェックエラー {str(e)}")
         return False
-
+        
 @app.route('/api/venue-schedule/<venue_code>', methods=['GET'])
-def get_venue_schedule(venue_code):
-    """指定会場の詳細スケジュール取得"""
+def get_venue_schedule_real(venue_code):
+    """実際のレーススケジュール取得"""
     try:
         today = datetime.now().strftime("%Y%m%d")
-        schedule = []
+        url = f"https://boatrace.jp/owpc/pc/race/racelist?jcd={venue_code}&hd={today}"
         
-        # 開催チェック
-        is_active = check_venue_active(venue_code, today)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
         
-        if not is_active:
+        response = requests.get(url, headers=headers, timeout=15)
+        
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            schedule = []
+            current_time = datetime.now()
+            
+            # レース時間の抽出（実際のHTMLパターンに合わせて調整が必要）
+            race_rows = soup.find_all('tr', class_='is-fs12')
+            
+            for i, row in enumerate(race_rows[:12], 1):
+                time_cell = row.find('td', class_='is-fs11')
+                if time_cell:
+                    race_time = time_cell.get_text().strip()
+                    
+                    # 現在時刻と比較してステータス判定
+                    try:
+                        race_datetime = datetime.strptime(f"{today} {race_time}", "%Y%m%d %H:%M")
+                        race_end = race_datetime + timedelta(minutes=25)
+                        
+                        if current_time > race_end:
+                            status = "completed"
+                        elif current_time >= race_datetime:
+                            status = "live"
+                        else:
+                            status = "upcoming"
+                    except:
+                        status = "upcoming"
+                    
+                    schedule.append({
+                        "race_number": i,
+                        "scheduled_time": race_time,
+                        "status": status
+                    })
+            
             return jsonify({
                 "venue_code": venue_code,
                 "date": today,
-                "is_active": False,
-                "schedule": [],
-                "message": "本日は開催されていません"
+                "is_active": len(schedule) > 0,
+                "schedule": schedule,
+                "timestamp": current_time.isoformat()
             })
-        
-        # 1R-12Rの詳細スケジュール生成
-        current_time = datetime.now()
-        
-        for race_num in range(1, 13):
-            # 12:00から30分間隔でレース設定
-            race_time_minutes = 12 * 60 + (race_num - 1) * 30
-            race_hour = race_time_minutes // 60
-            race_minute = race_time_minutes % 60
+        else:
+            return jsonify({"error": "データ取得失敗"}), 500
             
-            race_info = {
-                "race_number": race_num,
-                "scheduled_time": f"{race_hour}:{race_minute:02d}",
-                "status": "upcoming"
-            }
-            
-            # 現在時刻と比較してステータス決定
-            current_minutes = current_time.hour * 60 + current_time.minute
-            race_start_minutes = race_time_minutes
-            race_end_minutes = race_time_minutes + 25  # レース時間約25分
-            
-            if current_minutes > race_end_minutes:
-                race_info["status"] = "completed"
-            elif current_minutes >= race_start_minutes:
-                race_info["status"] = "live"
-            else:
-                race_info["status"] = "upcoming"
-            
-            schedule.append(race_info)
-        
-        return jsonify({
-            "venue_code": venue_code,
-            "date": today,
-            "is_active": True,
-            "schedule": schedule,
-            "timestamp": current_time.isoformat()
-        })
-        
     except Exception as e:
+        logger.error(f"スケジュール取得エラー: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
