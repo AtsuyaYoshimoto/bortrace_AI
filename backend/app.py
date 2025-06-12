@@ -804,75 +804,63 @@ import threading
 
 @app.route('/api/venue-status', methods=['GET'])
 def get_venue_status():
-    """キャッシュからの高速会場状況取得"""
+    """安全なフォールバック版（タイムアウト回避）"""
     try:
-        conn = sqlite3.connect('boatrace_data.db')
-        cursor = conn.cursor()
-        
-        # キャッシュからデータ取得
-        cursor.execute('''
-        SELECT venue_code, venue_name, is_active, current_race, remaining_races, status, last_updated, data_source
-        FROM venue_cache
-        ORDER BY venue_code
-        ''')
-        
-        cached_data = cursor.fetchall()
+        today = datetime.now().strftime("%Y%m%d")
+        current_time = datetime.now()
+        current_hour = current_time.hour
+        weekday = current_time.weekday()
         
         venue_status = {}
-        current_time = datetime.now()
         
-        if cached_data:
-            for row in cached_data:
-                venue_code, venue_name, is_active, current_race, remaining_races, status, last_updated, data_source = row
-                
-                # データの鮮度チェック（10分以内）
-                last_updated_dt = datetime.fromisoformat(last_updated) if last_updated else current_time
-                data_age_minutes = (current_time - last_updated_dt).total_seconds() / 60
-                
-                venue_status[venue_code] = {
-                    "is_active": bool(is_active),
-                    "venue_name": venue_name,
-                    "current_race": current_race,
-                    "status": status,
-                    "remaining_races": remaining_races,
-                    "total_races": 12,
-                    "last_updated": last_updated,
-                    "data_age_minutes": round(data_age_minutes, 1),
-                    "data_source": data_source
-                }
-        else:
-            # キャッシュが空の場合のフォールバック
-            logger.warning("キャッシュが空です。初回バッチ処理を実行してください。")
-            
-            # 基本的な会場リストを返す
-            venues_list = [
-                ("01", "桐生"), ("06", "浜名湖"), ("12", "住之江"), 
-                ("16", "児島"), ("20", "若松"), ("22", "福岡"), ("24", "大村")
-            ]
-            
-            for venue_code, venue_name in venues_list:
+        # 安全な推定ロジック（スクレイピングなし）
+        venues_list = [
+            ("01", "桐生"), ("02", "戸田"), ("03", "江戸川"), ("04", "平和島"), ("05", "多摩川"),
+            ("06", "浜名湖"), ("07", "蒲郡"), ("08", "常滑"), ("09", "津"), ("10", "三国"),
+            ("11", "びわこ"), ("12", "住之江"), ("13", "尼崎"), ("14", "鳴門"), ("15", "丸亀"),
+            ("16", "児島"), ("17", "宮島"), ("18", "徳山"), ("19", "下関"), ("20", "若松"),
+            ("21", "芦屋"), ("22", "福岡"), ("23", "唐津"), ("24", "大村")
+        ]
+        
+        # 時間帯による簡易判定（スクレイピングなし）
+        for venue_code, venue_name in venues_list:
+            # 平日夜・土日なら一部開催と推定
+            if (weekday < 5 and 15 <= current_hour <= 21) or (weekday >= 5 and 10 <= current_hour <= 21):
+                if venue_code in ["01", "12", "20", "22"]:  # 主要4場のみ
+                    venue_status[venue_code] = {
+                        "is_active": True,
+                        "venue_name": venue_name,
+                        "status": "estimated_active",
+                        "remaining_races": max(0, 6 - (current_hour - 15)),
+                        "note": "推定値（安全モード）"
+                    }
+                else:
+                    venue_status[venue_code] = {
+                        "is_active": False,
+                        "venue_name": venue_name,
+                        "status": "estimated_inactive",
+                        "remaining_races": 0
+                    }
+            else:
                 venue_status[venue_code] = {
                     "is_active": False,
                     "venue_name": venue_name,
-                    "status": "cache_empty",
-                    "remaining_races": 0,
-                    "message": "データ取得中..."
+                    "status": "estimated_closed",
+                    "remaining_races": 0
                 }
         
-        conn.close()
-        
         return jsonify({
-            "date": current_time.strftime("%Y%m%d"),
+            "date": today,
             "venue_status": venue_status,
             "timestamp": current_time.isoformat(),
-            "cache_count": len(cached_data),
-            "note": "キャッシュからの高速取得"
+            "mode": "safe_fallback",
+            "note": "タイムアウト回避のため推定値を使用"
         })
         
     except Exception as e:
-        logger.error(f"キャッシュ取得エラー: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
+        logger.error(f"安全API エラー: {str(e)}")
+        return jsonify({"error": "minimal_error"}), 500
+        
 @app.route('/api/venue-schedule/<venue_code>', methods=['GET'])
 def get_venue_schedule_cached(venue_code):
     """キャッシュからの高速スケジュール取得"""
@@ -1235,41 +1223,22 @@ def calculate_race_progress(schedule_data, current_time):
     return current_race, remaining_races, status
 
 def start_batch_scheduler():
-    """バッチ処理スケジューラー開始"""
-    logger.info("バッチ処理スケジューラー開始")
+def start_batch_scheduler():
+    """バッチ処理スケジューラー（緊急停止版）"""
+    logger.info("⚠️ バッチ処理は緊急停止中")
     
-    # 5分間隔でデータ更新
-    schedule.every(5).minutes.do(update_venue_data_batch)
+    # スクレイピングを完全停止
+    # schedule.every(5).minutes.do(update_venue_data_batch)
     
-    # 初回実行（30秒後）
-    schedule.every(30).seconds.do(update_venue_data_batch).tag('initial')
-    
-    def run_scheduler():
-        while True:
-            schedule.run_pending()
-            time.sleep(30)  # 30秒間隔でチェック
-    
-    # バックグラウンドスレッドで実行
-    scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
-    scheduler_thread.start()
-    
-    logger.info("スケジューラー設定完了")
-
+    logger.info("スクレイピング無効化完了")
 # 手動バッチ実行エンドポイント（テスト用）
 @app.route('/api/manual-batch', methods=['POST'])
 def manual_batch():
-    """手動でバッチ処理を実行"""
-    try:
-        # バックグラウンドで実行
-        batch_thread = threading.Thread(target=update_venue_data_batch, daemon=True)
-        batch_thread.start()
-        
-        return jsonify({
-            "status": "バッチ処理開始",
-            "message": "バックグラウンドでデータ更新中..."
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    """手動バッチ（緊急停止版）"""
+    return jsonify({
+        "status": "緊急停止中",
+        "message": "スクレイピングは一時的に無効化されています"
+    })
 
 # アプリ起動時にスケジューラー開始
 if __name__ == '__main__':
