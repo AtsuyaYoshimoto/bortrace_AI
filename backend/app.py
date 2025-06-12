@@ -804,77 +804,128 @@ import threading
 
 @app.route('/api/venue-status', methods=['GET'])
 def get_venue_status():
-    """全競艇場の開催状況を取得（改良版）"""
+    """キャッシュからの高速会場状況取得"""
     try:
-        today = datetime.now().strftime("%Y%m%d")
+        conn = sqlite3.connect('boatrace_data.db')
+        cursor = conn.cursor()
+        
+        # キャッシュからデータ取得
+        cursor.execute('''
+        SELECT venue_code, venue_name, is_active, current_race, remaining_races, status, last_updated, data_source
+        FROM venue_cache
+        ORDER BY venue_code
+        ''')
+        
+        cached_data = cursor.fetchall()
+        
         venue_status = {}
+        current_time = datetime.now()
         
-        # 全24会場（負荷軽減のため5会場ずつ処理）
-        venues_list = [
-            ("01", "桐生"), ("02", "戸田"), ("03", "江戸川"), ("04", "平和島"), ("05", "多摩川"),
-            ("06", "浜名湖"), ("07", "蒲郡"), ("08", "常滑"), ("09", "津"), ("10", "三国"),
-            ("11", "びわこ"), ("12", "住之江"), ("13", "尼崎"), ("14", "鳴門"), ("15", "丸亀"),
-            ("16", "児島"), ("17", "宮島"), ("18", "徳山"), ("19", "下関"), ("20", "若松"),
-            ("21", "芦屋"), ("22", "福岡"), ("23", "唐津"), ("24", "大村")
-        ]
-        
-        # 主要会場のみ先にチェック（処理時間短縮）
-        priority_venues = ["01", "06", "12", "16", "20", "22", "24"]
-        
-        for venue_code, venue_name in venues_list:
-            # 優先会場以外はスキップ（初回実装）
-            if venue_code not in priority_venues:
-                venue_status[venue_code] = {
-                    "is_active": False,
-                    "venue_name": venue_name,
-                    "status": "checking",
-                    "message": "チェック中..."
-                }
-                continue
+        if cached_data:
+            for row in cached_data:
+                venue_code, venue_name, is_active, current_race, remaining_races, status, last_updated, data_source = row
                 
-            is_active = check_venue_active(venue_code, today)
-            
-            if is_active:
-                # 現在時刻からレース状況を推定
-                current_hour = datetime.now().hour
-                
-                if 10 <= current_hour <= 17:
-                    current_race = min(12, max(1, (current_hour - 10) * 2 + 1))
-                    remaining_races = max(0, 12 - current_race + 1)
-                    status = "active"
-                else:
-                    current_race = 12
-                    remaining_races = 0
-                    status = "finished"
+                # データの鮮度チェック（10分以内）
+                last_updated_dt = datetime.fromisoformat(last_updated) if last_updated else current_time
+                data_age_minutes = (current_time - last_updated_dt).total_seconds() / 60
                 
                 venue_status[venue_code] = {
-                    "is_active": True,
+                    "is_active": bool(is_active),
                     "venue_name": venue_name,
                     "current_race": current_race,
                     "status": status,
                     "remaining_races": remaining_races,
-                    "total_races": 12
+                    "total_races": 12,
+                    "last_updated": last_updated,
+                    "data_age_minutes": round(data_age_minutes, 1),
+                    "data_source": data_source
                 }
-            else:
+        else:
+            # キャッシュが空の場合のフォールバック
+            logger.warning("キャッシュが空です。初回バッチ処理を実行してください。")
+            
+            # 基本的な会場リストを返す
+            venues_list = [
+                ("01", "桐生"), ("06", "浜名湖"), ("12", "住之江"), 
+                ("16", "児島"), ("20", "若松"), ("22", "福岡"), ("24", "大村")
+            ]
+            
+            for venue_code, venue_name in venues_list:
                 venue_status[venue_code] = {
                     "is_active": False,
                     "venue_name": venue_name,
-                    "status": "no_races",
+                    "status": "cache_empty",
                     "remaining_races": 0,
-                    "total_races": 0
+                    "message": "データ取得中..."
                 }
         
+        conn.close()
+        
         return jsonify({
-            "date": today,
+            "date": current_time.strftime("%Y%m%d"),
             "venue_status": venue_status,
-            "timestamp": datetime.now().isoformat(),
-            "note": "主要7会場のみチェック済み"
+            "timestamp": current_time.isoformat(),
+            "cache_count": len(cached_data),
+            "note": "キャッシュからの高速取得"
         })
         
     except Exception as e:
-        logger.error(f"会場状況取得エラー: {str(e)}")
+        logger.error(f"キャッシュ取得エラー: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/venue-schedule/<venue_code>', methods=['GET'])
+def get_venue_schedule_cached(venue_code):
+    """キャッシュからの高速スケジュール取得"""
+    try:
+        conn = sqlite3.connect('boatrace_data.db')
+        cursor = conn.cursor()
+        
+        # キャッシュからスケジュール取得
+        cursor.execute('''
+        SELECT race_number, scheduled_time, status, last_updated
+        FROM race_schedule_cache
+        WHERE venue_code = ?
+        ORDER BY race_number
+        ''', (venue_code,))
+        
+        schedule_data = cursor.fetchall()
+        
+        if schedule_data:
+            schedule = []
+            for race_number, scheduled_time, status, last_updated in schedule_data:
+                schedule.append({
+                    "race_number": race_number,
+                    "scheduled_time": scheduled_time,
+                    "status": status
+                })
+            
+            # 会場情報も取得
+            cursor.execute('SELECT venue_name FROM venue_cache WHERE venue_code = ?', (venue_code,))
+            venue_result = cursor.fetchone()
+            venue_name = venue_result[0] if venue_result else "Unknown"
+            
+            conn.close()
+            
+            return jsonify({
+                "venue_code": venue_code,
+                "venue_name": venue_name,
+                "date": datetime.now().strftime("%Y%m%d"),
+                "is_active": len(schedule) > 0,
+                "schedule": schedule,
+                "timestamp": datetime.now().isoformat(),
+                "note": "キャッシュからの取得"
+            })
+        else:
+            conn.close()
+            return jsonify({
+                "venue_code": venue_code,
+                "error": "スケジュールキャッシュなし",
+                "note": "バッチ処理でデータ取得中"
+            }), 404
+            
+    except Exception as e:
+        logger.error(f"スケジュールキャッシュ取得エラー: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 def check_venue_active(venue_code, date_str):
     """実際の競艇公式サイトから開催状況をチェック（改良版）"""
     try:
@@ -1183,7 +1234,50 @@ def calculate_race_progress(schedule_data, current_time):
     
     return current_race, remaining_races, status
 
+def start_batch_scheduler():
+    """バッチ処理スケジューラー開始"""
+    logger.info("バッチ処理スケジューラー開始")
+    
+    # 5分間隔でデータ更新
+    schedule.every(5).minutes.do(update_venue_data_batch)
+    
+    # 初回実行（30秒後）
+    schedule.every(30).seconds.do(update_venue_data_batch).tag('initial')
+    
+    def run_scheduler():
+        while True:
+            schedule.run_pending()
+            time.sleep(30)  # 30秒間隔でチェック
+    
+    # バックグラウンドスレッドで実行
+    scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+    scheduler_thread.start()
+    
+    logger.info("スケジューラー設定完了")
+
+# 手動バッチ実行エンドポイント（テスト用）
+@app.route('/api/manual-batch', methods=['POST'])
+def manual_batch():
+    """手動でバッチ処理を実行"""
+    try:
+        # バックグラウンドで実行
+        batch_thread = threading.Thread(target=update_venue_data_batch, daemon=True)
+        batch_thread.start()
+        
+        return jsonify({
+            "status": "バッチ処理開始",
+            "message": "バックグラウンドでデータ更新中..."
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# アプリ起動時にスケジューラー開始
 if __name__ == '__main__':
+    # データベース初期化
+    initialize_database()
+    
+    # スケジューラー開始
+    start_batch_scheduler()
+    
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
-    
