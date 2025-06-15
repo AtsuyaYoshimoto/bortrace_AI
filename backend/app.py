@@ -920,7 +920,9 @@ def check_venue_active(venue_code, date_str):
         import random
         
         # アクセス間隔をランダムに設定（負荷軽減）
-        time.sleep(random.uniform(0.5, 2.0))
+        time.sleep(random.uniform(3, 8))
+
+        MAX_REQUESTS_PER_HOUR = 50
         
         url = f"https://boatrace.jp/owpc/pc/race/racelist?jcd={venue_code}&hd={date_str}"
         
