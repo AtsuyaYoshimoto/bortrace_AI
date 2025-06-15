@@ -11,10 +11,7 @@ import re
 import threading
 from datetime import datetime, timedelta
 import sys
-import threading
 import schedule
-from datetime import datetime, timedelta
-from datetime import datetime, timedelta
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
 import logging
@@ -1222,7 +1219,6 @@ def calculate_race_progress(schedule_data, current_time):
     
     return current_race, remaining_races, status
 
-def start_batch_scheduler():
 def start_batch_scheduler():
     """バッチ処理スケジューラー（緊急停止版）"""
     logger.info("⚠️ バッチ処理は緊急停止中")
