@@ -963,63 +963,108 @@ import threading
 
 @app.route('/api/venue-status', methods=['GET'])
 def get_venue_status():
-    """安全なフォールバック版（タイムアウト回避）"""
+    """効率的な会場状況取得（タイムアウト対策版）"""
     try:
         today = datetime.now().strftime("%Y%m%d")
         current_time = datetime.now()
         current_hour = current_time.hour
-        weekday = current_time.weekday()
         
         venue_status = {}
         
-        # 安全な推定ロジック（スクレイピングなし）
-        venues_list = [
-            ("01", "桐生"), ("02", "戸田"), ("03", "江戸川"), ("04", "平和島"), ("05", "多摩川"),
-            ("06", "浜名湖"), ("07", "蒲郡"), ("08", "常滑"), ("09", "津"), ("10", "三国"),
-            ("11", "びわこ"), ("12", "住之江"), ("13", "尼崎"), ("14", "鳴門"), ("15", "丸亀"),
-            ("16", "児島"), ("17", "宮島"), ("18", "徳山"), ("19", "下関"), ("20", "若松"),
-            ("21", "芦屋"), ("22", "福岡"), ("23", "唐津"), ("24", "大村")
+        # 主要4会場のみ安全にチェック（負荷軽減）
+        priority_venues = [
+            ("01", "桐生"), ("12", "住之江"), ("20", "若松"), ("22", "福岡")
         ]
         
-        # 時間帯による簡易判定（スクレイピングなし）
-        for venue_code, venue_name in venues_list:
-            # 平日夜・土日なら一部開催と推定
-            if (weekday < 5 and 15 <= current_hour <= 21) or (weekday >= 5 and 10 <= current_hour <= 21):
-                if venue_code in ["01", "12", "20", "22"]:  # 主要4場のみ
+        for venue_code, venue_name in priority_venues:
+            try:
+                # 1会場あたり最大10秒でタイムアウト
+                is_active = check_venue_quick(venue_code, today)
+                
+                if is_active:
                     venue_status[venue_code] = {
                         "is_active": True,
                         "venue_name": venue_name,
-                        "status": "estimated_active",
-                        "remaining_races": max(0, 6 - (current_hour - 15)),
-                        "note": "推定値（安全モード）"
+                        "status": "active",
+                        "remaining_races": max(0, 8 - max(0, current_hour - 10)),
+                        "current_time": f"{current_hour:02d}:00"
                     }
                 else:
                     venue_status[venue_code] = {
                         "is_active": False,
                         "venue_name": venue_name,
-                        "status": "estimated_inactive",
+                        "status": "closed",
                         "remaining_races": 0
                     }
-            else:
+                    
+                # 各会場間に2秒間隔
+                time.sleep(2)
+                
+            except Exception as e:
+                logger.error(f"会場{venue_code}エラー: {str(e)}")
+                # エラー時は非開催として処理
                 venue_status[venue_code] = {
                     "is_active": False,
                     "venue_name": venue_name,
-                    "status": "estimated_closed",
+                    "status": "error",
                     "remaining_races": 0
                 }
+        
+        # その他の会場は非開催として処理（時間短縮）
+        all_venues = [
+            ("02", "戸田"), ("03", "江戸川"), ("04", "平和島"), ("05", "多摩川"),
+            ("06", "浜名湖"), ("07", "蒲郡"), ("08", "常滑"), ("09", "津"), ("10", "三国"),
+            ("11", "びわこ"), ("13", "尼崎"), ("14", "鳴門"), ("15", "丸亀"),
+            ("16", "児島"), ("17", "宮島"), ("18", "徳山"), ("19", "下関"),
+            ("21", "芦屋"), ("23", "唐津"), ("24", "大村")
+        ]
+        
+        for venue_code, venue_name in all_venues:
+            venue_status[venue_code] = {
+                "is_active": False,
+                "venue_name": venue_name,
+                "status": "not_checked",
+                "remaining_races": 0,
+                "note": "優先度低のため未チェック"
+            }
         
         return jsonify({
             "date": today,
             "venue_status": venue_status,
             "timestamp": current_time.isoformat(),
-            "mode": "safe_fallback",
-            "note": "タイムアウト回避のため推定値を使用"
+            "mode": "quick_check",
+            "checked_venues": len(priority_venues)
         })
         
     except Exception as e:
-        logger.error(f"安全API エラー: {str(e)}")
-        return jsonify({"error": "minimal_error"}), 500
+        logger.error(f"会場状況取得エラー: {str(e)}")
+        return jsonify({"error": "サーバーエラー"}), 500
+
+def check_venue_quick(venue_code, date_str):
+    """超高速会場チェック（10秒タイムアウト）"""
+    try:
+        url = f"https://boatrace.jp/owpc/pc/race/racelist?jcd={venue_code}&hd={date_str}"
         
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        # 10秒タイムアウトで取得
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            # 簡易チェック（HTMLパース最小限）
+            return 'レース' in response.text and '1R' in response.text
+        else:
+            return False
+            
+    except requests.exceptions.Timeout:
+        logger.warning(f"会場{venue_code}: 10秒タイムアウト")
+        return False
+    except Exception as e:
+        logger.error(f"会場{venue_code}: エラー {str(e)}")
+        return False
+      
 @app.route('/api/venue-schedule/<venue_code>', methods=['GET'])
 def get_venue_schedule_cached(venue_code):
     """キャッシュからの高速スケジュール取得"""
