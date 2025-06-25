@@ -547,93 +547,143 @@ async function showAccurateRaceSelector() {
     }
 }
 
-// 新しいAPIに対応した関数
 async function loadVenues() {
     try {
-        console.log('=== 実際の競艇データ取得開始 ===');
+        console.log('=== 競艇会場データ取得開始 ===');
         
-        const venues = await boatraceAPI.getVenues();
         const venueGrid = document.getElementById('venue-grid');
-        
         if (!venueGrid) {
             console.error('venue-grid要素が見つかりません');
             return;
         }
         
-        venueGrid.innerHTML = '<div style="text-align:center;padding:20px;">データ取得中...</div>';
+        // ローディング表示
+        venueGrid.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align:center; padding:40px;">
+                <i class="fas fa-spinner fa-spin" style="font-size:2rem; color:var(--primary); margin-bottom:1rem;"></i>
+                <div style="color:var(--primary); font-weight:600;">競艇場状況取得中...</div>
+            </div>
+        `;
         
-        // 実際のAPIから会場状況を取得
-        const statusResponse = await fetch(`${boatraceAPI.baseUrl}/venue-status`);
+        // APIから会場データ取得
+        const [venues, statusResponse] = await Promise.all([
+            boatraceAPI.getVenues(),
+            fetch(`${boatraceAPI.baseUrl}/venue-status`)
+        ]);
+        
         const venueStatusData = await statusResponse.json();
-        
-        console.log('取得した実際の会場状況:', venueStatusData);
+        console.log('取得した会場状況:', venueStatusData);
         
         venueGrid.innerHTML = '';
         
-        // 各会場のカードを生成
-        for (const [code, venueData] of Object.entries(venues)) {
-            const status = venueStatusData.venue_status?.[code];
-            
-            const venueCard = document.createElement('div');
-            venueCard.className = 'venue-card';
-            
-            console.log(`会場${code}(${venueData.name}):`, status);
-            
-            if (status && status.is_active) {
-                venueCard.classList.add('active');
-                
-                // ステータスに応じた表示
-                let statusText = 'LIVE';
-                let raceInfo = '';
-                
-                if (status.status === 'live') {
-                    statusText = 'LIVE';
-                    raceInfo = `${status.current_race}R進行中`;
-                } else if (status.status === 'active') {
-                    statusText = 'レース中';
-                    raceInfo = `残り${status.remaining_races}R`;
-                } else {
-                    raceInfo = '開催中';
-                }
-                
-                venueCard.innerHTML = `
-                    <div class="venue-status-indicator live">${statusText}</div>
-                    <div class="venue-name">${venueData.name}</div>
-                    <div class="venue-location">${venueData.location}</div>
-                    <div class="venue-race-status">${raceInfo}</div>
-                `;
-                
-                venueCard.onclick = () => selectVenue(code, venueData.name);
-                
-            } else {
-                venueCard.classList.add('inactive');
-                venueCard.innerHTML = `
-                    <div class="venue-status-indicator closed">休場</div>
-                    <div class="venue-name">${venueData.name}</div>
-                    <div class="venue-location">${venueData.location}</div>
-                    <div class="venue-race-status">本日開催なし</div>
-                `;
-            }
-            
-            venueGrid.appendChild(venueCard);
-        }
+        // 開催中の会場を優先表示
+        const sortedVenues = Object.entries(venues).sort(([codeA], [codeB]) => {
+            const statusA = venueStatusData.venue_status?.[codeA];
+            const statusB = venueStatusData.venue_status?.[codeB];
+            const priorityA = statusA?.is_active ? 3 : 1;
+            const priorityB = statusB?.is_active ? 3 : 1;
+            return priorityB - priorityA;
+        });
         
-        console.log('=== 実際の競艇データ表示完了 ===');
+        // 各会場カードを生成
+        sortedVenues.forEach(([code, venueData]) => {
+            const status = venueStatusData.venue_status?.[code];
+            const venueCard = createVenueCard(code, venueData, status);
+            venueGrid.appendChild(venueCard);
+        });
+        
+        // 状況サマリーを更新
+        updateVenueSummary(venueStatusData);
+        
+        console.log('=== 競艇会場データ表示完了 ===');
         
     } catch (error) {
-        console.error('実際のデータ取得エラー:', error);
+        console.error('会場データ取得エラー:', error);
+        showVenueError();
+    }
+}
+
+function createVenueCard(code, venueData, status) {
+    const venueCard = document.createElement('div');
+    venueCard.className = 'venue-card';
+    
+    if (status?.is_active) {
+        // 開催中の会場
+        venueCard.classList.add('active');
         
-        // エラー時の表示
-        const venueGrid = document.getElementById('venue-grid');
-        if (venueGrid) {
-            venueGrid.innerHTML = `
-                <div style="text-align:center;padding:20px;color:#dc3545;">
-                    <i class="fas fa-exclamation-triangle"></i><br>
-                    データ取得エラー<br>
-                    <button class="btn btn-primary" onclick="loadVenues()">再試行</button>
-                </div>
-            `;
+        const statusText = status.status === 'live' ? 'LIVE' : 'レース中';
+        const raceInfo = `${status.current_time || ''} (残り${status.remaining_races}R)`;
+        
+        venueCard.innerHTML = `
+            <div class="venue-status-indicator live">${statusText}</div>
+            <div class="venue-name">${venueData.name}</div>
+            <div class="venue-location">${venueData.location}</div>
+            <div class="venue-race-status active-status">${raceInfo}</div>
+        `;
+        
+        venueCard.onclick = () => selectVenue(code, venueData.name);
+        
+    } else {
+        // 非開催の会場
+        venueCard.classList.add('inactive');
+        
+        let statusText = '休場';
+        let reason = '本日開催なし';
+        
+        if (status?.status === 'error') {
+            statusText = 'エラー';
+            reason = 'データ取得不能';
+        } else if (status?.status === 'not_checked') {
+            statusText = '未確認';
+            reason = '確認対象外';
         }
+        
+        venueCard.innerHTML = `
+            <div class="venue-status-indicator closed">${statusText}</div>
+            <div class="venue-name">${venueData.name}</div>
+            <div class="venue-location">${venueData.location}</div>
+            <div class="venue-race-status inactive-status">${reason}</div>
+        `;
+    }
+    
+    return venueCard;
+}
+
+function updateVenueSummary(venueStatusData) {
+    const statusIndicator = document.getElementById('status-indicator');
+    if (!statusIndicator) return;
+    
+    const activeCount = venueStatusData.active_venues || 0;
+    const checkedCount = venueStatusData.checked_venues || 0;
+    const currentHour = venueStatusData.current_hour || new Date().getHours();
+    
+    if (activeCount > 0) {
+        statusIndicator.className = 'status-indicator status-success';
+        statusIndicator.innerHTML = `
+            <i class="fas fa-check-circle"></i> 
+            開催中: ${activeCount}会場 (${currentHour}時台・${checkedCount}会場確認済み)
+        `;
+    } else {
+        statusIndicator.className = 'status-indicator status-success';
+        statusIndicator.innerHTML = `
+            <i class="fas fa-info-circle"></i> 
+            開催なし (${currentHour}時台・${checkedCount}会場確認済み)
+        `;
+    }
+}
+
+function showVenueError() {
+    const venueGrid = document.getElementById('venue-grid');
+    if (venueGrid) {
+        venueGrid.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align:center; padding:40px; color:var(--danger);">
+                <i class="fas fa-exclamation-triangle" style="font-size:2rem; margin-bottom:1rem;"></i>
+                <div style="font-weight:600; margin-bottom:1rem;">データ取得エラー</div>
+                <button class="btn btn-primary" onclick="loadVenues()">
+                    <i class="fas fa-sync-alt"></i> 再試行
+                </button>
+            </div>
+        `;
     }
 }
 
