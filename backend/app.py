@@ -39,27 +39,71 @@ class SafeBoatraceClient:
         self.session = requests.Session()
         self.user_agents = [
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         ]
         self.last_request_time = {}
+        self.request_count = {}
+        
+        # リトライ設定
+        retry_strategy = Retry(total=3, backoff_factor=2, status_forcelist=[429, 500, 502, 503, 504])
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
     
     def safe_get(self, url, venue_code):
+        # 最低8秒間隔
         if venue_code in self.last_request_time:
             elapsed = time.time() - self.last_request_time[venue_code]
             if elapsed < 8:
                 time.sleep(8 - elapsed)
         
-        headers = {'User-Agent': random.choice(self.user_agents)}
+        # ランダム待機
+        time.sleep(random.uniform(2, 5))
         
-        try:
-            response = self.session.get(url, headers=headers, timeout=20)
-            self.last_request_time[venue_code] = time.time()
-            return response if response.status_code == 200 else None
-        except:
-            return None
-
-safe_client = SafeBoatraceClient()
-
+        headers = {
+            'User-Agent': random.choice(self.user_agents),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'ja,en-US;q=0.7,en;q=0.3',
+            'Cache-Control': 'no-cache'
+        }
+        
+        for attempt in range(3):
+            try:
+                response = self.session.get(url, headers=headers, timeout=25)
+                
+                if response.status_code == 429:
+                    logger.warning(f"会場{venue_code}: レート制限 - 120秒待機")
+                    time.sleep(120)
+                    continue
+                elif response.status_code == 200:
+                    self.last_request_time[venue_code] = time.time()
+                    return response
+                else:
+                    logger.warning(f"会場{venue_code}: HTTP {response.status_code}")
+                    if attempt < 2:
+                        time.sleep(10 * (attempt + 1))
+                        continue
+                    return None
+                    
+            except requests.exceptions.Timeout:
+                logger.warning(f"会場{venue_code}: タイムアウト (試行{attempt + 1}/3)")
+                if attempt < 2:
+                    time.sleep(15)
+                    continue
+                return None
+            except requests.exceptions.ConnectionError:
+                logger.warning(f"会場{venue_code}: 接続エラー (試行{attempt + 1}/3)")
+                if attempt < 2:
+                    time.sleep(20)
+                    continue
+                return None
+            except Exception as e:
+                logger.error(f"会場{venue_code}: エラー {str(e)}")
+                return None
+        
+        return None
+        
 app = Flask(__name__)
 CORS(app)
 
@@ -251,6 +295,129 @@ def get_race_info_improved(race_url):
         
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+def get_real_race_schedule(venue_code, date_str):
+    """競艇公式サイトから実際のレーススケジュール取得"""
+    try:
+        url = f"https://boatrace.jp/owpc/pc/race/racelist?jcd={venue_code}&hd={date_str}"
+        response = safe_client.safe_get(url, venue_code)
+        
+        if not response:
+            logger.warning(f"会場{venue_code}: レスポンス取得失敗")
+            return None
+            
+        soup = BeautifulSoup(response.content, 'html.parser')
+        current_time = datetime.now(pytz.timezone('Asia/Tokyo'))
+        schedule = []
+        
+        # 実際のHTMLからレース情報を抽出
+        # レース一覧テーブルを探す
+        race_table = soup.find('table', class_='is-w495') or soup.find('div', class_='table1')
+        
+        if race_table:
+            rows = race_table.find_all('tr')
+            
+            for row in rows:
+                cells = row.find_all(['td', 'th'])
+                if len(cells) >= 3:
+                    # 時刻カラム（通常1番目のセル）
+                    time_cell = cells[0].get_text().strip()
+                    # レース番号カラム（通常2番目のセル）
+                    race_cell = cells[1].get_text().strip()
+                    
+                    # 時刻パターンマッチ（HH:MM）
+                    time_match = re.search(r'(\d{1,2}):(\d{2})', time_cell)
+                    # レース番号パターンマッチ
+                    race_match = re.search(r'(\d+)R', race_cell)
+                    
+                    if time_match and race_match:
+                        hour = int(time_match.group(1))
+                        minute = int(time_match.group(2))
+                        race_number = int(race_match.group(1))
+                        
+                        # 今日の該当時刻を作成
+                        race_datetime = current_time.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                        race_end = race_datetime + timedelta(minutes=25)
+                        
+                        # 正確なステータス判定
+                        if current_time > race_end:
+                            status = "completed"
+                        elif current_time >= race_datetime - timedelta(minutes=5):
+                            status = "live"
+                        else:
+                            status = "upcoming"
+                        
+                        schedule.append({
+                            "race_number": race_number,
+                            "scheduled_time": f"{hour:02d}:{minute:02d}",
+                            "status": status,
+                            "race_datetime": race_datetime.isoformat()
+                        })
+        
+        # レース番号順でソート
+        schedule.sort(key=lambda x: x["race_number"])
+        
+        logger.info(f"会場{venue_code}: {len(schedule)}レースの実際のスケジュール取得")
+        return schedule if schedule else None
+                
+        except requests.exceptions.RequestException as e:
+            logger.error(f"会場{venue_code}: リクエスト例外 {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"会場{venue_code}: 予期しないエラー {str(e)}")
+            return None
+
+@app.route('/api/venue-schedule/<venue_code>', methods=['GET'])
+def get_real_venue_schedule(venue_code):
+    """実際のレーススケジュール取得API"""
+    try:
+        today = datetime.now(pytz.timezone('Asia/Tokyo')).strftime("%Y%m%d")
+        
+        # 実際のスケジュール取得
+        schedule = get_real_race_schedule(venue_code, today)
+        
+        if not schedule:
+            return jsonify({
+                "venue_code": venue_code,
+                "error": "レーススケジュール取得失敗",
+                "note": "開催なしまたはデータ取得不能"
+            }), 404
+        
+        # 進行状況分析
+        live_races = [r for r in schedule if r["status"] == "live"]
+        upcoming_races = [r for r in schedule if r["status"] == "upcoming"]
+        completed_races = [r for r in schedule if r["status"] == "completed"]
+        
+        current_race = live_races[0]["race_number"] if live_races else (
+            upcoming_races[0]["race_number"] if upcoming_races else len(schedule)
+        )
+        
+        # 会場名取得
+        venues = {
+            "01": "桐生", "04": "平和島", "12": "住之江", 
+            "15": "丸亀", "20": "若松", "24": "大村"
+        }
+        venue_name = venues.get(venue_code, f"会場{venue_code}")
+        
+        return jsonify({
+            "venue_code": venue_code,
+            "venue_name": venue_name,
+            "date": today,
+            "is_active": len(live_races) > 0 or len(upcoming_races) > 0,
+            "current_race": current_race,
+            "remaining_races": len(upcoming_races) + (1 if live_races else 0),
+            "schedule": schedule,
+            "summary": {
+                "completed": len(completed_races),
+                "live": len(live_races),
+                "upcoming": len(upcoming_races)
+            },
+            "timestamp": datetime.now(pytz.timezone('Asia/Tokyo')).isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"実スケジュール取得エラー: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 def update_venue_data_batch():
     """バックグラウンドで会場データを更新"""
@@ -830,62 +997,49 @@ import threading
 @app.route('/api/venue-status', methods=['GET'])
 def get_venue_status():
     try:
-        # 日本時間取得
-        import pytz
         jst = pytz.timezone('Asia/Tokyo')
         current_time = datetime.now(jst)
         today = current_time.strftime("%Y%m%d")
-        current_hour = current_time.hour
         
         venue_status = {}
-        
-        # 21:56なら確実にナイター開催中
         nighter_venues = [
             ("01", "桐生"), ("04", "平和島"), ("12", "住之江"), 
             ("15", "丸亀"), ("20", "若松"), ("24", "大村")
         ]
         
-        # 時間帯判定で確実に開催中を設定
         for venue_code, venue_name in nighter_venues:
-            if 15 <= current_hour <= 21:  # ナイター時間
+            # 実際のスケジュール取得
+            schedule = get_real_race_schedule(venue_code, today)
+            
+            if schedule:
+                live_races = [r for r in schedule if r["status"] == "live"]
+                upcoming_races = [r for r in schedule if r["status"] == "upcoming"]
+                
+                is_active = len(live_races) > 0 or len(upcoming_races) > 0
+                remaining_races = len(upcoming_races) + (1 if live_races else 0)
+                
+                current_race_info = live_races[0] if live_races else (
+                    upcoming_races[0] if upcoming_races else schedule[-1]
+                )
+                
                 venue_status[venue_code] = {
-                    "is_active": True,
+                    "is_active": is_active,
                     "venue_name": venue_name,
-                    "status": "live",
-                    "remaining_races": max(1, 22 - current_hour),
-                    "current_time": current_time.strftime("%H:%M"),
-                    "note": "ナイター開催中"
+                    "status": "live" if live_races else ("active" if upcoming_races else "finished"),
+                    "remaining_races": remaining_races,
+                    "current_time": current_race_info["scheduled_time"],
+                    "current_race": current_race_info["race_number"],
+                    "note": "実際のスケジュール取得"
                 }
             else:
-                # 実際のスクレイピングで確認
-                try:
-                    url = f"https://boatrace.jp/owpc/pc/race/racelist?jcd={venue_code}&hd={today}"
-                    response = safe_client.safe_get(url, venue_code)
-                    
-                    if response and ('R' in response.text or 'レース' in response.text):
-                        venue_status[venue_code] = {
-                            "is_active": True,
-                            "venue_name": venue_name,
-                            "status": "active",
-                            "remaining_races": 3,
-                            "current_time": current_time.strftime("%H:%M")
-                        }
-                    else:
-                        venue_status[venue_code] = {
-                            "is_active": False,
-                            "venue_name": venue_name,
-                            "status": "closed",
-                            "remaining_races": 0
-                        }
-                except:
-                    venue_status[venue_code] = {
-                        "is_active": False,
-                        "venue_name": venue_name,
-                        "status": "error",
-                        "remaining_races": 0
-                    }
+                venue_status[venue_code] = {
+                    "is_active": False,
+                    "venue_name": venue_name,
+                    "status": "closed",
+                    "remaining_races": 0
+                }
         
-        # その他会場は非開催
+        # その他会場は非チェック
         other_venues = [
             ("02", "戸田"), ("03", "江戸川"), ("05", "多摩川"), ("06", "浜名湖"),
             ("07", "蒲郡"), ("08", "常滑"), ("09", "津"), ("10", "三国"), ("11", "びわこ"),
@@ -907,14 +1061,13 @@ def get_venue_status():
             "date": today,
             "venue_status": venue_status,
             "timestamp": current_time.isoformat(),
-            "current_hour": current_hour,
             "checked_venues": len(nighter_venues),
             "active_venues": active_count,
-            "note": f"日本時間{current_hour}時台"
+            "mode": "real_schedule_data"
         })
         
     except Exception as e:
-        logger.error(f"会場状況取得エラー: {str(e)}")
+        logger.error(f"実データ取得エラー: {str(e)}")
         return jsonify({"error": str(e)}), 500
         
 def check_venue_quick(venue_code, date_str):
