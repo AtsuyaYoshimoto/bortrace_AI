@@ -1111,6 +1111,144 @@ async function updateAIPrediction() {
     }
 }
 
+function selectVenue(venueCode, venueName) {
+    selectedVenue = venueCode;
+    
+    // 選択状態の更新
+    document.querySelectorAll('.venue-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    event.target.closest('.venue-card').classList.add('selected');
+    
+    // 選択情報を更新
+    document.getElementById('selected-venue-name').textContent = venueName;
+    
+    // レース選択UIを表示
+    showRaceSelector(venueCode, venueName);
+}
+
+async function showRaceSelector(venueCode, venueName) {
+    const raceSelector = document.getElementById('race-selector');
+    const raceButtons = document.getElementById('race-buttons');
+    
+    if (!raceSelector || !raceButtons) {
+        console.error('レース選択UI要素が見つかりません');
+        return;
+    }
+    
+    raceSelector.style.display = 'block';
+    raceButtons.innerHTML = '<div style="text-align:center; padding:20px;">レース情報取得中...</div>';
+    
+    try {
+        // 現在時刻から推定レース生成（23:35なら残り3レース程度）
+        const currentHour = new Date().getHours();
+        const currentMinute = new Date().getMinutes();
+        
+        // ナイター会場の場合（15:00-21:00が一般的だが延長あり）
+        const raceSchedule = generateRaceSchedule(currentHour, currentMinute);
+        
+        raceButtons.innerHTML = '';
+        
+        raceSchedule.forEach((race) => {
+            const raceBtn = document.createElement('button');
+            raceBtn.className = 'race-btn';
+            raceBtn.classList.add(race.status);
+            
+            let statusText = '';
+            if (race.status === 'live') statusText = '<div class="race-status">LIVE</div>';
+            if (race.status === 'completed') statusText = '<div class="race-status">終了</div>';
+            
+            raceBtn.innerHTML = `
+                <div>${race.race_number}R</div>
+                <div class="race-time">${race.scheduled_time}</div>
+                ${statusText}
+            `;
+            
+            raceBtn.onclick = () => selectRace(race.race_number, venueCode, venueName);
+            raceButtons.appendChild(raceBtn);
+        });
+        
+    } catch (error) {
+        console.error('レース情報取得エラー:', error);
+        raceButtons.innerHTML = `
+            <div style="text-align:center; color:var(--danger); padding:20px;">
+                レース情報取得エラー<br>
+                <button class="btn btn-sm" onclick="showRaceSelector('${venueCode}', '${venueName}')">
+                    再試行
+                </button>
+            </div>
+        `;
+    }
+}
+
+function generateRaceSchedule(currentHour, currentMinute) {
+    const races = [];
+    const baseHour = 15; // ナイター開始時刻
+    const currentTimeMinutes = currentHour * 60 + currentMinute;
+    
+    for (let i = 1; i <= 12; i++) {
+        const raceStartMinutes = baseHour * 60 + (i - 1) * 30;
+        const raceEndMinutes = raceStartMinutes + 25;
+        
+        const hour = Math.floor(raceStartMinutes / 60);
+        const minute = raceStartMinutes % 60;
+        
+        let status = 'upcoming';
+        if (currentTimeMinutes > raceEndMinutes) {
+            status = 'completed';
+        } else if (currentTimeMinutes >= raceStartMinutes && currentTimeMinutes <= raceEndMinutes) {
+            status = 'live';
+        }
+        
+        races.push({
+            race_number: i,
+            scheduled_time: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`,
+            status: status
+        });
+    }
+    
+    return races;
+}
+
+function selectRace(raceNumber, venueCode, venueName) {
+    selectedRace = raceNumber;
+    
+    // 選択状態の更新
+    document.querySelectorAll('.race-btn').forEach(btn => {
+        btn.classList.remove('selected');
+    });
+    event.target.classList.add('selected');
+    
+    // 選択情報を更新
+    document.getElementById('selected-race-info').textContent = ` - 第${raceNumber}レース`;
+    
+    // 出走表データを取得
+    loadSelectedRaceData(venueCode, raceNumber, venueName);
+}
+
+async function loadSelectedRaceData(venueCode, raceNumber, venueName) {
+    try {
+        const response = await fetch(`${boatraceAPI.baseUrl}/race-data?venue=${venueCode}&race=${raceNumber}`);
+        const data = await response.json();
+        
+        if (data.racer_extraction && data.racer_extraction.racers) {
+            displayRealRacers(data.racer_extraction.racers);
+            
+            // レース情報を更新
+            document.querySelector('.race-header h3').textContent = `${venueName} 第${raceNumber}レース`;
+            document.getElementById('venue-name').textContent = venueName;
+            document.getElementById('race-number').textContent = `${raceNumber}R`;
+            
+            // 表示切り替え
+            document.getElementById('race-info').style.display = 'block';
+            document.getElementById('prediction-container').style.display = 'block';
+        }
+        
+    } catch (error) {
+        console.error('レースデータ取得エラー:', error);
+    }
+}
+
 /**
  * 現在表示中の選手データを取得
  */
