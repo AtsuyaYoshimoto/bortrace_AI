@@ -37,72 +37,155 @@ print(f"🔍 AI初期化処理完了: AI_AVAILABLE = {AI_AVAILABLE}")
 class SafeBoatraceClient:
     def __init__(self):
         self.session = requests.Session()
+        self.proxies = []  # プロキシリスト（必要に応じて追加）
+        self.current_proxy_index = 0
         self.user_agents = [
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
             'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0'
         ]
         self.last_request_time = {}
         self.request_count = {}
+        self.session_start_time = time.time()
         
-        # リトライ設定
-        retry_strategy = Retry(total=3, backoff_factor=2, status_forcelist=[429, 500, 502, 503, 504])
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-        self.session.mount("http://", adapter)
-        self.session.mount("https://", adapter)
+        # セッション設定（ブラウザ模倣）
+        self.session.headers.update({
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Cache-Control': 'max-age=0',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Upgrade-Insecure-Requests': '1'
+        })
     
-    def safe_get(self, url, venue_code):
-        # 最低8秒間隔
+    def human_like_delay(self, venue_code):
+        """人間らしい待機時間"""
         if venue_code in self.last_request_time:
             elapsed = time.time() - self.last_request_time[venue_code]
-            if elapsed < 8:
-                time.sleep(8 - elapsed)
+            min_interval = random.uniform(12, 20)  # 12-20秒間隔
+            if elapsed < min_interval:
+                wait_time = min_interval - elapsed
+                logger.info(f"会場{venue_code}: {wait_time:.1f}秒待機中...")
+                time.sleep(wait_time)
         
-        # ランダム待機
-        time.sleep(random.uniform(2, 5))
-        
-        headers = {
+        # 追加ランダム待機
+        time.sleep(random.uniform(2, 6))
+    
+    def get_browser_headers(self):
+        """ブラウザライクなヘッダー生成"""
+        return {
             'User-Agent': random.choice(self.user_agents),
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'ja,en-US;q=0.7,en;q=0.3',
-            'Cache-Control': 'no-cache'
+            'Referer': 'https://www.boatrace.jp/',
+            'Origin': 'https://www.boatrace.jp',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            'Sec-Ch-Ua-Mobile': '?0',
+            'Sec-Ch-Ua-Platform': '"Windows"'
         }
+    
+    def safe_get(self, url, venue_code):
+        """完全対策版リクエスト"""
+        # 人間らしい待機
+        self.human_like_delay(venue_code)
         
+        # 1時間に最大5リクエストまで
+        current_hour = int(time.time() // 3600)
+        hour_key = f"{venue_code}_{current_hour}"
+        
+        if hour_key in self.request_count:
+            if self.request_count[hour_key] >= 5:
+                logger.warning(f"会場{venue_code}: 1時間制限到達")
+                return None
+        
+        # ヘッダー更新
+        headers = self.get_browser_headers()
+        
+        # 3回までリトライ
         for attempt in range(3):
             try:
-                response = self.session.get(url, headers=headers, timeout=25)
+                # プロキシローテーション（設定されている場合）
+                proxies = None
+                if self.proxies:
+                    proxy = self.proxies[self.current_proxy_index % len(self.proxies)]
+                    proxies = {'http': proxy, 'https': proxy}
+                    self.current_proxy_index += 1
                 
-                if response.status_code == 429:
-                    logger.warning(f"会場{venue_code}: レート制限 - 120秒待機")
-                    time.sleep(120)
-                    continue
-                elif response.status_code == 200:
+                # リクエスト実行
+                response = self.session.get(
+                    url, 
+                    headers=headers, 
+                    proxies=proxies,
+                    timeout=30,
+                    allow_redirects=True
+                )
+                
+                # レスポンス処理
+                if response.status_code == 200:
+                    # 成功時の処理
                     self.last_request_time[venue_code] = time.time()
+                    self.request_count[hour_key] = self.request_count.get(hour_key, 0) + 1
+                    
+                    logger.info(f"会場{venue_code}: 取得成功 ({len(response.content)}バイト)")
                     return response
+                    
+                elif response.status_code == 429:
+                    # レート制限
+                    wait_time = random.uniform(180, 300)  # 3-5分待機
+                    logger.warning(f"会場{venue_code}: レート制限 - {wait_time:.0f}秒待機")
+                    time.sleep(wait_time)
+                    continue
+                    
+                elif response.status_code in [403, 406]:
+                    # アクセス拒否
+                    logger.warning(f"会場{venue_code}: アクセス拒否 ({response.status_code})")
+                    time.sleep(random.uniform(60, 120))
+                    continue
+                    
+                elif response.status_code == 404:
+                    # ページなし（開催なし）
+                    logger.info(f"会場{venue_code}: 404 - 開催なし")
+                    return None
+                    
                 else:
                     logger.warning(f"会場{venue_code}: HTTP {response.status_code}")
                     if attempt < 2:
-                        time.sleep(10 * (attempt + 1))
+                        time.sleep(random.uniform(30, 60))
                         continue
                     return None
                     
             except requests.exceptions.Timeout:
                 logger.warning(f"会場{venue_code}: タイムアウト (試行{attempt + 1}/3)")
                 if attempt < 2:
-                    time.sleep(15)
+                    time.sleep(random.uniform(20, 40))
                     continue
                 return None
-            except requests.exceptions.ConnectionError:
-                logger.warning(f"会場{venue_code}: 接続エラー (試行{attempt + 1}/3)")
+                
+            except requests.exceptions.ConnectionError as e:
+                logger.warning(f"会場{venue_code}: 接続エラー - {str(e)}")
                 if attempt < 2:
-                    time.sleep(20)
+                    time.sleep(random.uniform(30, 60))
                     continue
                 return None
+                
             except Exception as e:
-                logger.error(f"会場{venue_code}: エラー {str(e)}")
+                logger.error(f"会場{venue_code}: 予期しないエラー - {str(e)}")
                 return None
         
         return None
+    
+    def reset_session(self):
+        """セッションリセット（定期実行）"""
+        if time.time() - self.session_start_time > 3600:  # 1時間ごと
+            self.session.close()
+            self.session = requests.Session()
+            self.session_start_time = time.time()
+            logger.info("セッションリセット完了")
         
 app = Flask(__name__)
 CORS(app)
@@ -1002,51 +1085,47 @@ def get_venue_status():
         today = current_time.strftime("%Y%m%d")
         
         venue_status = {}
-        nighter_venues = [
-            ("01", "桐生"), ("04", "平和島"), ("12", "住之江"), 
-            ("15", "丸亀"), ("20", "若松"), ("24", "大村")
-        ]
         
-        for venue_code, venue_name in nighter_venues:
-            # 実際のスケジュール取得
-            schedule = get_real_race_schedule(venue_code, today)
-            
-            if schedule:
-                live_races = [r for r in schedule if r["status"] == "live"]
-                upcoming_races = [r for r in schedule if r["status"] == "upcoming"]
+        # 1会場ずつ慎重にチェック
+        priority_venues = [("01", "桐生"), ("20", "若松")]  # まず2会場のみ
+        
+        for venue_code, venue_name in priority_venues:
+            try:
+                logger.info(f"会場{venue_code}({venue_name})チェック開始...")
                 
-                is_active = len(live_races) > 0 or len(upcoming_races) > 0
-                remaining_races = len(upcoming_races) + (1 if live_races else 0)
+                schedule = get_real_race_schedule(venue_code, today)
                 
-                current_race_info = live_races[0] if live_races else (
-                    upcoming_races[0] if upcoming_races else schedule[-1]
-                )
+                if schedule:
+                    live_races = [r for r in schedule if r["status"] == "live"]
+                    upcoming_races = [r for r in schedule if r["status"] == "upcoming"]
+                    
+                    venue_status[venue_code] = {
+                        "is_active": len(live_races) > 0 or len(upcoming_races) > 0,
+                        "venue_name": venue_name,
+                        "status": "live" if live_races else "active",
+                        "remaining_races": len(upcoming_races) + (1 if live_races else 0),
+                        "data_source": "scraped"
+                    }
+                    logger.info(f"会場{venue_code}: データ取得成功")
+                else:
+                    venue_status[venue_code] = {
+                        "is_active": False,
+                        "venue_name": venue_name,
+                        "status": "closed",
+                        "remaining_races": 0
+                    }
                 
-                venue_status[venue_code] = {
-                    "is_active": is_active,
-                    "venue_name": venue_name,
-                    "status": "live" if live_races else ("active" if upcoming_races else "finished"),
-                    "remaining_races": remaining_races,
-                    "current_time": current_race_info["scheduled_time"],
-                    "current_race": current_race_info["race_number"],
-                    "note": "実際のスケジュール取得"
-                }
-            else:
+            except Exception as e:
+                logger.error(f"会場{venue_code}処理エラー: {str(e)}")
                 venue_status[venue_code] = {
                     "is_active": False,
                     "venue_name": venue_name,
-                    "status": "closed",
+                    "status": "error",
                     "remaining_races": 0
                 }
         
-        # その他会場は非チェック
-        other_venues = [
-            ("02", "戸田"), ("03", "江戸川"), ("05", "多摩川"), ("06", "浜名湖"),
-            ("07", "蒲郡"), ("08", "常滑"), ("09", "津"), ("10", "三国"), ("11", "びわこ"),
-            ("13", "尼崎"), ("14", "鳴門"), ("16", "児島"), ("17", "宮島"), 
-            ("18", "徳山"), ("19", "下関"), ("21", "芦屋"), ("22", "福岡"), ("23", "唐津")
-        ]
-        
+        # その他会場は未チェック
+        other_venues = [("04", "平和島"), ("12", "住之江"), ("15", "丸亀"), ("24", "大村")]
         for venue_code, venue_name in other_venues:
             venue_status[venue_code] = {
                 "is_active": False,
@@ -1055,19 +1134,15 @@ def get_venue_status():
                 "remaining_races": 0
             }
         
-        active_count = sum(1 for v in venue_status.values() if v.get("is_active"))
-        
         return jsonify({
             "date": today,
             "venue_status": venue_status,
             "timestamp": current_time.isoformat(),
-            "checked_venues": len(nighter_venues),
-            "active_venues": active_count,
-            "mode": "real_schedule_data"
+            "mode": "ultra_safe"
         })
         
     except Exception as e:
-        logger.error(f"実データ取得エラー: {str(e)}")
+        logger.error(f"API全体エラー: {str(e)}")
         return jsonify({"error": str(e)}), 500
         
 def check_venue_quick(venue_code, date_str):
