@@ -426,14 +426,12 @@ def get_real_race_schedule(venue_code, date_str):
         response = safe_client.safe_get(url, venue_code)
         
         if not response:
-            logger.warning(f"会場{venue_code}: レスポンス取得失敗")
             return None
             
         soup = BeautifulSoup(response.content, 'html.parser')
         current_time = datetime.now(pytz.timezone('Asia/Tokyo'))
         schedule = []
         
-        # 実際のHTMLからレース情報を抽出
         # レース一覧テーブルを探す
         race_table = soup.find('table', class_='is-w495') or soup.find('div', class_='table1')
         
@@ -443,14 +441,10 @@ def get_real_race_schedule(venue_code, date_str):
             for row in rows:
                 cells = row.find_all(['td', 'th'])
                 if len(cells) >= 3:
-                    # 時刻カラム（通常1番目のセル）
                     time_cell = cells[0].get_text().strip()
-                    # レース番号カラム（通常2番目のセル）
                     race_cell = cells[1].get_text().strip()
                     
-                    # 時刻パターンマッチ（HH:MM）
                     time_match = re.search(r'(\d{1,2}):(\d{2})', time_cell)
-                    # レース番号パターンマッチ
                     race_match = re.search(r'(\d+)R', race_cell)
                     
                     if time_match and race_match:
@@ -458,11 +452,9 @@ def get_real_race_schedule(venue_code, date_str):
                         minute = int(time_match.group(2))
                         race_number = int(race_match.group(1))
                         
-                        # 今日の該当時刻を作成
                         race_datetime = current_time.replace(hour=hour, minute=minute, second=0, microsecond=0)
                         race_end = race_datetime + timedelta(minutes=25)
                         
-                        # 正確なステータス判定
                         if current_time > race_end:
                             status = "completed"
                         elif current_time >= race_datetime - timedelta(minutes=5):
@@ -473,23 +465,16 @@ def get_real_race_schedule(venue_code, date_str):
                         schedule.append({
                             "race_number": race_number,
                             "scheduled_time": f"{hour:02d}:{minute:02d}",
-                            "status": status,
-                            "race_datetime": race_datetime.isoformat()
+                            "status": status
                         })
         
-        # レース番号順でソート
         schedule.sort(key=lambda x: x["race_number"])
-        
-        logger.info(f"会場{venue_code}: {len(schedule)}レースの実際のスケジュール取得")
         return schedule if schedule else None
-                
-        except requests.exceptions.RequestException as e:
-            logger.error(f"会場{venue_code}: リクエスト例外 {str(e)}")
-            return None
-        except Exception as e:
-            logger.error(f"会場{venue_code}: 予期しないエラー {str(e)}")
-            return None
-
+        
+    except Exception as e:
+        logger.error(f"会場{venue_code}スケジュール取得エラー: {str(e)}")
+        return None
+        
 @app.route('/api/venue-schedule/<venue_code>', methods=['GET'])
 def get_real_venue_schedule(venue_code):
     """実際のレーススケジュール取得API"""
