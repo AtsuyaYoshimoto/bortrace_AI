@@ -186,7 +186,47 @@ class SafeBoatraceClient:
             self.session = requests.Session()
             self.session_start_time = time.time()
             logger.info("セッションリセット完了")
-        
+
+import threading
+from apscheduler.schedulers.background import BackgroundScheduler
+
+class VenueDataManager:
+    def __init__(self):
+        self.scheduler = BackgroundScheduler()
+        self.venue_cache = {}
+        self.last_update = None
+        self.all_venues = [
+            ("01", "桐生"), ("02", "戸田"), ("03", "江戸川"), ("04", "平和島"), ("05", "多摩川"),
+            ("06", "浜名湖"), ("07", "蒲郡"), ("08", "常滑"), ("09", "津"), ("10", "三国"),
+            ("11", "びわこ"), ("12", "住之江"), ("13", "尼崎"), ("14", "鳴門"), ("15", "丸亀"),
+            ("16", "児島"), ("17", "宮島"), ("18", "徳山"), ("19", "下関"), ("20", "若松"),
+            ("21", "芦屋"), ("22", "福岡"), ("23", "唐津"), ("24", "大村")
+        ]
+    
+    def start_background_updates(self):
+        self.scheduler.add_job(func=self.update_all_venues, trigger="interval", minutes=5)
+        self.scheduler.start()
+    
+    def update_all_venues(self):
+        for venue_code, venue_name in self.all_venues:
+            try:
+                time.sleep(30)
+                schedule = get_real_race_schedule(venue_code, datetime.now().strftime("%Y%m%d"))
+                self.venue_cache[venue_code] = {
+                    "is_active": bool(schedule),
+                    "venue_name": venue_name,
+                    "schedule": schedule or [],
+                    "last_updated": datetime.now().isoformat()
+                }
+            except:
+                self.venue_cache[venue_code] = {
+                    "is_active": False,
+                    "venue_name": venue_name,
+                    "last_updated": datetime.now().isoformat()
+                }
+
+venue_manager = VenueDataManager()
+
 app = Flask(__name__)
 CORS(app)
 
@@ -1080,69 +1120,24 @@ import threading
 @app.route('/api/venue-status', methods=['GET'])
 def get_venue_status():
     try:
-        jst = pytz.timezone('Asia/Tokyo')
-        current_time = datetime.now(jst)
-        today = current_time.strftime("%Y%m%d")
+        current_time = datetime.now(pytz.timezone('Asia/Tokyo'))
         
         venue_status = {}
-        
-        # 1会場ずつ慎重にチェック
-        priority_venues = [("01", "桐生"), ("20", "若松")]  # まず2会場のみ
-        
-        for venue_code, venue_name in priority_venues:
-            try:
-                logger.info(f"会場{venue_code}({venue_name})チェック開始...")
-                
-                schedule = get_real_race_schedule(venue_code, today)
-                
-                if schedule:
-                    live_races = [r for r in schedule if r["status"] == "live"]
-                    upcoming_races = [r for r in schedule if r["status"] == "upcoming"]
-                    
-                    venue_status[venue_code] = {
-                        "is_active": len(live_races) > 0 or len(upcoming_races) > 0,
-                        "venue_name": venue_name,
-                        "status": "live" if live_races else "active",
-                        "remaining_races": len(upcoming_races) + (1 if live_races else 0),
-                        "data_source": "scraped"
-                    }
-                    logger.info(f"会場{venue_code}: データ取得成功")
-                else:
-                    venue_status[venue_code] = {
-                        "is_active": False,
-                        "venue_name": venue_name,
-                        "status": "closed",
-                        "remaining_races": 0
-                    }
-                
-            except Exception as e:
-                logger.error(f"会場{venue_code}処理エラー: {str(e)}")
-                venue_status[venue_code] = {
-                    "is_active": False,
-                    "venue_name": venue_name,
-                    "status": "error",
-                    "remaining_races": 0
-                }
-        
-        # その他会場は未チェック
-        other_venues = [("04", "平和島"), ("12", "住之江"), ("15", "丸亀"), ("24", "大村")]
-        for venue_code, venue_name in other_venues:
+        for venue_code, cache_data in venue_manager.venue_cache.items():
             venue_status[venue_code] = {
-                "is_active": False,
-                "venue_name": venue_name,
-                "status": "not_checked",
-                "remaining_races": 0
+                "is_active": cache_data["is_active"],
+                "venue_name": cache_data["venue_name"],
+                "status": "live" if cache_data["is_active"] else "closed",
+                "remaining_races": len([r for r in cache_data.get("schedule", []) if r.get("status") == "upcoming"])
             }
         
         return jsonify({
-            "date": today,
+            "date": current_time.strftime("%Y%m%d"),
             "venue_status": venue_status,
             "timestamp": current_time.isoformat(),
-            "mode": "ultra_safe"
+            "mode": "cached_data"
         })
-        
     except Exception as e:
-        logger.error(f"API全体エラー: {str(e)}")
         return jsonify({"error": str(e)}), 500
         
 def check_venue_quick(venue_code, date_str):
@@ -1560,3 +1555,4 @@ if __name__ == '__main__':
     
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+    venue_manager.start_background_updates()
