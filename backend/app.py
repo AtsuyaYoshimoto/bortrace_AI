@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import sys
 import schedule
 import os
+import pytz
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
