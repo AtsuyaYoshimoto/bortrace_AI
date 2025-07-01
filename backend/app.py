@@ -38,6 +38,255 @@ print(f"🔍 AI初期化処理完了: AI_AVAILABLE = {AI_AVAILABLE}")
 import threading
 from apscheduler.schedulers.background import BackgroundScheduler
 
+# ===== ユーティリティ関数 =====
+
+def get_today_date():
+    """今日の日付を取得（YYYYMMDD形式）"""
+    return datetime.now().strftime("%Y%m%d")
+
+def build_race_url(venue_code, race_number, date_str):
+    """レースURLを構築"""
+    base_url = "https://boatrace.jp/owpc/pc/race/racelist"
+    url = f"{base_url}?rno={race_number}&jcd={venue_code}&hd={date_str}"
+    return url
+
+def extract_racer_data_final(html_content):
+    """最終版：選手情報抽出"""
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # 全てのtd要素を取得
+        td_elements = soup.find_all('td')
+        
+        racers = []
+        
+        # 選手データの正規表現パターン
+        # "4421 / B1 森作　　広大 東京/茨城 36歳/56.1kg"
+        racer_pattern = r'(\d{4})\s*/\s*([AB][12])\s*([^\n]+?)\s+([^/\n]+)/([^\n]+?)\s+(\d+)歳/(\d+\.\d+)kg'
+        
+        for td in td_elements:
+            text = td.get_text().strip()
+            match = re.search(racer_pattern, text, re.MULTILINE | re.DOTALL)
+            
+            if match and len(racers) < 6:  # 6艇まで
+                # 名前部分を整理（余分な空白を除去）
+                name_raw = match.group(3).strip()
+                name_clean = re.sub(r'\s+', ' ', name_raw).strip()
+                
+                racers.append({
+                    "boat_number": len(racers) + 1,
+                    "registration_number": match.group(1),
+                    "class": match.group(2),
+                    "name": name_clean,
+                    "region": match.group(4).strip(),
+                    "branch": match.group(5).strip(),
+                    "age": int(match.group(6)),
+                    "weight": f"{match.group(7)}kg"
+                })
+        
+        return {
+            "status": "success",
+            "racers": racers,
+            "found_count": len(racers)
+        }
+        
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# ===== 新しいBoatraceDataCollectorクラス =====
+
+class BoatraceDataCollector:
+    def __init__(self):
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'ja,en-US;q=0.7,en;q=0.3',
+            'Accept-Encoding': 'gzip, deflate',
+            'Referer': 'https://boatrace.jp/',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Cache-Control': 'max-age=0'
+        })
+        
+    def get_daily_race_data(self):
+        """本日の全出走表情報取得"""
+        try:
+            url = "https://www.boatrace.jp/owpc/pc/race/index"
+            logger.info(f"日次レースデータ取得開始: {url}")
+            
+            response = self.session.get(url, timeout=30)
+            
+            if response.status_code == 200:
+                return self.parse_race_index(response.content)
+            else:
+                logger.error(f"レースインデックス取得失敗: {response.status_code}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"レースデータ取得エラー: {str(e)}")
+            return None
+    
+    def parse_race_index(self, html_content):
+        """出走表情報パース"""
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            race_data = {}
+            
+            logger.info("レースインデックスページの解析開始")
+            
+            # 会場リンクを探す（実際のHTML構造に合わせて調整が必要）
+            venue_links = soup.find_all('a', href=re.compile(r'jcd=\d{2}'))
+            
+            for link in venue_links:
+                try:
+                    href = link.get('href')
+                    venue_match = re.search(r'jcd=(\d{2})', href)
+                    
+                    if venue_match:
+                        venue_code = venue_match.group(1)
+                        venue_name = link.get_text().strip()
+                        
+                        # 各会場の基本情報を取得
+                        race_data[venue_code] = {
+                            'venue_name': venue_name,
+                            'venue_code': venue_code,
+                            'is_active': True,
+                            'races': []
+                        }
+                        
+                        logger.info(f"会場発見: {venue_code} - {venue_name}")
+                        
+                except Exception as e:
+                    logger.warning(f"会場リンク解析エラー: {str(e)}")
+                    continue
+            
+            return race_data
+            
+        except Exception as e:
+            logger.error(f"レースインデックス解析エラー: {str(e)}")
+            return {}
+    
+    def get_venue_race_details(self, venue_code, date_str=None):
+        """指定会場の詳細レース情報取得"""
+        if date_str is None:
+            date_str = get_today_date()
+            
+        try:
+            # 会場のレース一覧ページにアクセス
+            url = f"https://boatrace.jp/owpc/pc/race/racelist?jcd={venue_code}&hd={date_str}"
+            logger.info(f"会場{venue_code}のレース詳細取得: {url}")
+            
+            response = self.session.get(url, timeout=30)
+            time.sleep(2)  # サーバー負荷軽減
+            
+            if response.status_code == 200:
+                return self.parse_venue_races(response.content, venue_code)
+            else:
+                logger.warning(f"会場{venue_code}: レース詳細取得失敗 {response.status_code}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"会場{venue_code}レース詳細取得エラー: {str(e)}")
+            return None
+    
+    def parse_venue_races(self, html_content, venue_code):
+        """会場のレース情報解析"""
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            races = []
+            
+            # レース時刻表を探す
+            time_cells = soup.find_all('td', class_='is-fs11')
+            
+            for i, time_cell in enumerate(time_cells[:12], 1):  # 最大12レース
+                race_time = time_cell.get_text().strip()
+                
+                if race_time and ':' in race_time:
+                    races.append({
+                        'race_number': i,
+                        'scheduled_time': race_time,
+                        'status': 'upcoming',
+                        'venue_code': venue_code
+                    })
+            
+            logger.info(f"会場{venue_code}: {len(races)}レース発見")
+            return races
+            
+        except Exception as e:
+            logger.error(f"会場{venue_code}レース解析エラー: {str(e)}")
+            return []
+    
+    def get_race_entries(self, venue_code, race_number, date_str=None):
+        """出走表取得（選手情報込み）"""
+        if date_str is None:
+            date_str = get_today_date()
+            
+        try:
+            race_url = build_race_url(venue_code, race_number, date_str)
+            logger.info(f"出走表取得: 会場{venue_code} {race_number}R")
+            
+            response = self.session.get(race_url, timeout=30)
+            time.sleep(1)  # 負荷軽減
+            
+            if response.status_code == 200:
+                racer_data = extract_racer_data_final(response.content)
+                return racer_data
+            else:
+                logger.warning(f"出走表取得失敗: {response.status_code}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"出走表取得エラー: {str(e)}")
+            return None
+    
+    def get_pre_race_info(self, venue_code, race_number, date_str=None):
+        """直前情報取得（展示タイム・欠場情報等）"""
+        if date_str is None:
+            date_str = get_today_date()
+            
+        try:
+            # 直前情報ページのURL
+            url = f"https://boatrace.jp/owpc/pc/race/beforeinfo?rno={race_number}&jcd={venue_code}&hd={date_str}"
+            logger.info(f"直前情報取得: 会場{venue_code} {race_number}R")
+            
+            response = self.session.get(url, timeout=30)
+            time.sleep(1)
+            
+            if response.status_code == 200:
+                return self.parse_pre_race_info(response.content)
+            else:
+                logger.warning(f"直前情報取得失敗: {response.status_code}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"直前情報取得エラー: {str(e)}")
+            return None
+    
+    def parse_pre_race_info(self, html_content):
+        """直前情報解析"""
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            pre_race_info = {
+                'exhibition_times': [],
+                'weather': None,
+                'wind_speed': None,
+                'water_temp': None,
+                'absences': []
+            }
+            
+            # 展示タイム抽出（実際のHTML構造に合わせて実装）
+            # TODO: 実際のページ構造を確認して実装
+            
+            logger.info("直前情報解析完了")
+            return pre_race_info
+            
+        except Exception as e:
+            logger.error(f"直前情報解析エラー: {str(e)}")
+            return None
+
+# ===== 修正版VenueDataManagerクラス =====
+
 class VenueDataManager:
     def __init__(self):
         self.scheduler = BackgroundScheduler()
@@ -50,29 +299,146 @@ class VenueDataManager:
             ("16", "児島"), ("17", "宮島"), ("18", "徳山"), ("19", "下関"), ("20", "若松"),
             ("21", "芦屋"), ("22", "福岡"), ("23", "唐津"), ("24", "大村")
         ]
+        self.data_collector = BoatraceDataCollector()
     
     def start_background_updates(self):
-        self.scheduler.add_job(func=self.update_all_venues, trigger="interval", minutes=5)
+        # 毎日0時にレースデータ更新
+        self.scheduler.add_job(
+            func=self.update_daily_races,
+            trigger="cron", 
+            hour=0, 
+            minute=0
+        )
+        
+        # 展示タイム更新（1時間ごと）
+        self.scheduler.add_job(
+            func=self.update_pre_race_info,
+            trigger="interval",
+            hours=1
+        )
+        
         self.scheduler.start()
+        logger.info("スケジューラー開始: 0時日次更新、1時間ごと直前情報更新")
     
-    def update_all_venues(self):
-        for venue_code, venue_name in self.all_venues:
-            try:
-                time.sleep(30)
-                schedule = get_real_race_schedule(venue_code, datetime.now().strftime("%Y%m%d"))
-                self.venue_cache[venue_code] = {
-                    "is_active": bool(schedule),
-                    "venue_name": venue_name,
-                    "schedule": schedule or [],
-                    "last_updated": datetime.now().isoformat()
-                }
-            except:
-                self.venue_cache[venue_code] = {
-                    "is_active": False,
-                    "venue_name": venue_name,
-                    "last_updated": datetime.now().isoformat()
-                }
+    def update_daily_races(self):
+        """0時実行：本日の全レースデータ更新"""
+        logger.info("=== 日次レースデータ更新開始 ===")
+        
+        try:
+            # 全体のレースデータ取得
+            race_data = self.data_collector.get_daily_race_data()
+            
+            if race_data:
+                # 各会場の詳細情報を取得
+                for venue_code, venue_info in race_data.items():
+                    try:
+                        # 会場の詳細レース情報取得
+                        races = self.data_collector.get_venue_race_details(venue_code)
+                        
+                        if races:
+                            venue_info['races'] = races
+                            venue_info['is_active'] = len(races) > 0
+                            venue_info['race_count'] = len(races)
+                        else:
+                            venue_info['is_active'] = False
+                            venue_info['races'] = []
+                            venue_info['race_count'] = 0
+                            
+                        # キャッシュ更新
+                        self.venue_cache[venue_code] = {
+                            **venue_info,
+                            "last_updated": datetime.now().isoformat()
+                        }
+                        
+                        logger.info(f"会場{venue_code}({venue_info.get('venue_name', '不明')}): {len(races)}レース")
+                        
+                        # サーバー負荷軽減
+                        time.sleep(2)
+                        
+                    except Exception as e:
+                        logger.error(f"会場{venue_code}の詳細取得エラー: {str(e)}")
+                        continue
+                
+                logger.info("=== 日次更新完了 ===")
+            else:
+                logger.warning("日次レースデータ取得失敗")
+                
+        except Exception as e:
+            logger.error(f"日次更新エラー: {str(e)}")
+    
+    def update_pre_race_info(self):
+        """直前情報更新（展示タイム発表時）"""
+        logger.info("=== 直前情報更新開始 ===")
+        
+        try:
+            current_time = datetime.now()
+            
+            # アクティブな会場のみチェック
+            for venue_code, venue_data in self.venue_cache.items():
+                if not venue_data.get('is_active', False):
+                    continue
+                    
+                races = venue_data.get('races', [])
+                
+                for race in races:
+                    try:
+                        race_number = race.get('race_number')
+                        scheduled_time = race.get('scheduled_time')
+                        
+                        if not race_number or not scheduled_time:
+                            continue
+                        
+                        # レース開始2時間前から直前情報取得
+                        try:
+                            race_time = datetime.strptime(
+                                f"{current_time.strftime('%Y%m%d')} {scheduled_time}", 
+                                "%Y%m%d %H:%M"
+                            )
+                            time_diff = (race_time - current_time).total_seconds() / 3600
+                            
+                            # 2時間前～レース開始まで
+                            if 0 <= time_diff <= 2:
+                                pre_race_info = self.data_collector.get_pre_race_info(
+                                    venue_code, race_number
+                                )
+                                
+                                if pre_race_info:
+                                    race['pre_race_info'] = pre_race_info
+                                    race['last_pre_race_update'] = current_time.isoformat()
+                                    logger.info(f"直前情報更新: 会場{venue_code} {race_number}R")
+                                
+                        except Exception as e:
+                            logger.warning(f"時刻解析エラー: {str(e)}")
+                            continue
+                            
+                        # API負荷軽減
+                        time.sleep(1)
+                        
+                    except Exception as e:
+                        logger.error(f"レース{race_number}直前情報エラー: {str(e)}")
+                        continue
+                        
+        except Exception as e:
+            logger.error(f"直前情報更新エラー: {str(e)}")
+    
+    def get_venue_status(self, venue_code):
+        """会場ステータス取得"""
+        return self.venue_cache.get(venue_code, {
+            "is_active": False,
+            "venue_name": "不明",
+            "last_updated": None
+        })
+    
+    def get_race_entries(self, venue_code, race_number):
+        """出走表情報取得"""
+        try:
+            return self.data_collector.get_race_entries(venue_code, race_number)
+        except Exception as e:
+            logger.error(f"出走表取得エラー: {str(e)}")
+            return None
 
+# ===== グローバルインスタンス =====
+data_collector = BoatraceDataCollector()
 venue_manager = VenueDataManager()
 
 app = Flask(__name__)
@@ -171,7 +537,188 @@ def get_venues():
     }
     return jsonify(venues)
 
-# データベース関連
+# ===== 新しいAPIエンドポイント =====
+
+@app.route('/api/race-entries/<venue_code>/<race_number>', methods=['GET'])
+def get_race_entries_api(venue_code, race_number):
+    """出走表情報API"""
+    try:
+        # バリデーション
+        if venue_code not in [f"{i:02d}" for i in range(1, 25)]:
+            return jsonify({
+                "error": "無効な会場コードです",
+                "valid_codes": "01-24"
+            }), 400
+            
+        if not race_number.isdigit() or not (1 <= int(race_number) <= 12):
+            return jsonify({
+                "error": "無効なレース番号です", 
+                "valid_range": "1-12"
+            }), 400
+        
+        # 出走表取得
+        entries = venue_manager.get_race_entries(venue_code, race_number)
+        
+        if entries and entries.get("status") == "success":
+            # 会場情報も追加
+            venues = get_venues().get_json()
+            venue_info = venues.get(venue_code, {"name": "不明", "location": "不明"})
+            
+            return jsonify({
+                "venue_code": venue_code,
+                "venue_name": venue_info["name"],
+                "race_number": race_number,
+                "entries": entries,
+                "timestamp": datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                "error": "出走表データ取得失敗",
+                "venue_code": venue_code,
+                "race_number": race_number,
+                "suggestion": "レース開催状況を確認してください"
+            }), 404
+            
+    except Exception as e:
+        logger.error(f"出走表API エラー: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/venue-status-new/<venue_code>', methods=['GET'])
+def get_venue_status_new(venue_code):
+    """新しい会場ステータスAPI（キャッシュから高速取得）"""
+    try:
+        if venue_code not in [f"{i:02d}" for i in range(1, 25)]:
+            return jsonify({
+                "error": "無効な会場コードです",
+                "valid_codes": "01-24"
+            }), 400
+        
+        # キャッシュから取得
+        status = venue_manager.get_venue_status(venue_code)
+        
+        # 会場名情報を追加
+        venues = get_venues().get_json()
+        venue_info = venues.get(venue_code, {"name": "不明", "location": "不明"})
+        
+        return jsonify({
+            "venue_code": venue_code,
+            "venue_name": venue_info["name"],
+            "venue_location": venue_info["location"],
+            "status": status,
+            "timestamp": datetime.now().isoformat(),
+            "note": "キャッシュからの高速取得"
+        })
+        
+    except Exception as e:
+        logger.error(f"会場ステータスAPI エラー: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/daily-races', methods=['GET'])
+def get_daily_races():
+    """本日開催中の全会場情報API"""
+    try:
+        active_venues = []
+        
+        for venue_code, venue_data in venue_manager.venue_cache.items():
+            if venue_data.get('is_active', False):
+                venues = get_venues().get_json()
+                venue_info = venues.get(venue_code, {"name": "不明", "location": "不明"})
+                
+                active_venues.append({
+                    "venue_code": venue_code,
+                    "venue_name": venue_info["name"],
+                    "venue_location": venue_info["location"],
+                    "race_count": venue_data.get('race_count', 0),
+                    "races": venue_data.get('races', []),
+                    "last_updated": venue_data.get('last_updated')
+                })
+        
+        return jsonify({
+            "date": get_today_date(),
+            "active_venue_count": len(active_venues),
+            "venues": active_venues,
+            "timestamp": datetime.now().isoformat(),
+            "note": "0時更新の日次データ"
+        })
+        
+    except Exception as e:
+        logger.error(f"日次レースAPI エラー: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/pre-race-info/<venue_code>/<race_number>', methods=['GET'])
+def get_pre_race_info_api(venue_code, race_number):
+    """直前情報API（展示タイム・天候等）"""
+    try:
+        # バリデーション
+        if venue_code not in [f"{i:02d}" for i in range(1, 25)]:
+            return jsonify({
+                "error": "無効な会場コードです",
+                "valid_codes": "01-24"
+            }), 400
+            
+        if not race_number.isdigit() or not (1 <= int(race_number) <= 12):
+            return jsonify({
+                "error": "無効なレース番号です",
+                "valid_range": "1-12"
+            }), 400
+        
+        # 直前情報取得
+        pre_race_info = data_collector.get_pre_race_info(venue_code, race_number)
+        
+        if pre_race_info:
+            venues = get_venues().get_json()
+            venue_info = venues.get(venue_code, {"name": "不明", "location": "不明"})
+            
+            return jsonify({
+                "venue_code": venue_code,
+                "venue_name": venue_info["name"],
+                "race_number": race_number,
+                "pre_race_info": pre_race_info,
+                "timestamp": datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                "error": "直前情報取得失敗",
+                "venue_code": venue_code,
+                "race_number": race_number,
+                "suggestion": "展示タイム発表前またはレース未開催"
+            }), 404
+            
+    except Exception as e:
+        logger.error(f"直前情報API エラー: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/system-status', methods=['GET'])
+def get_system_status():
+    """システム全体のステータス確認API"""
+    try:
+        total_venues = len(venue_manager.all_venues)
+        active_venues = sum(1 for v in venue_manager.venue_cache.values() if v.get('is_active', False))
+        
+        last_updates = [
+            v.get('last_updated') for v in venue_manager.venue_cache.values() 
+            if v.get('last_updated')
+        ]
+        
+        return jsonify({
+            "system_status": "running",
+            "ai_available": AI_AVAILABLE,
+            "data_collection": {
+                "total_venues": total_venues,
+                "active_venues": active_venues,
+                "cache_entries": len(venue_manager.venue_cache),
+                "last_update": max(last_updates) if last_updates else None
+            },
+            "scheduler_running": venue_manager.scheduler.running,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"システムステータス エラー: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+# ===== データベース関連 =====
+
 def initialize_database():
     conn = sqlite3.connect('boatrace_data.db')
     cursor = conn.cursor()
@@ -235,7 +782,8 @@ def init_database():
     initialize_database()
     return jsonify({"status": "Database initialized"})
 
-# スクレイピング関連の関数
+# ===== 既存のスクレイピング関連エンドポイント（保持） =====
+
 def get_race_info_improved(race_url):
     """改良版のレース情報取得（基本版）"""
     headers = {
@@ -387,7 +935,7 @@ def real_data_test():
             "error": str(e),
             "suggestion": "システム側の問題です。後ほど再試行してください。"
         })
-        
+
 @app.route('/api/kyotei/<venue_code>', methods=['GET'])
 def get_kyotei_data(venue_code):
     """指定された競艇場のデータを取得（キャッシュ対応版）"""
@@ -401,7 +949,7 @@ def get_kyotei_data(venue_code):
     
     try:
         # 今日の日付を取得
-        today = datetime.datetime.now().strftime("%Y%m%d")
+        today = datetime.now().strftime("%Y%m%d")
         
         # 動的なURL生成（venue_codeを使用）
         race_url = f"https://boatrace.jp/owpc/pc/race/racelist?rno=1&jcd={venue_code}&hd={today}"
@@ -520,6 +1068,8 @@ def get_venue_races():
             "suggestion": "システム側の問題です。後ほど再試行してください。"
         }), 500
 
+# ===== キャッシュ関連 =====
+
 cache_data = {}
 cache_lock = threading.Lock()
 
@@ -536,6 +1086,8 @@ def set_cached_data(cache_key, data):
     """キャッシュにデータを保存"""
     with cache_lock:
         cache_data[cache_key] = (data, datetime.now())
+
+# ===== AI関連エンドポイント =====
 
 @app.route('/api/race-features/<race_id>', methods=['GET'])
 def get_race_features(race_id):
@@ -620,6 +1172,8 @@ if __name__ == '__main__':
     # データベース初期化
     initialize_database()
     
+    # スケジューラー開始
+    venue_manager.start_background_updates()
+    
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
-    venue_manager.start_background_updates()
