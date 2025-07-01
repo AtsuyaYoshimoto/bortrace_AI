@@ -1167,13 +1167,21 @@ def train_daily():
 # バックグラウンドでデータ収集開始
 import threading
 
-# アプリ起動時にスケジューラー開始
+# ===== スケジューラー自動起動の修正 =====
+
+# メイン実行ブロックの外でスケジューラー開始
+def initialize_app():
+    """アプリケーション初期化"""
+    try:
+        initialize_database()
+        venue_manager.start_background_updates()
+        logger.info("✅ スケジューラー開始完了")
+    except Exception as e:
+        logger.error(f"❌ 初期化エラー: {str(e)}")
+
+# アプリ起動時に自動実行
+initialize_app()
+
 if __name__ == '__main__':
-    # データベース初期化
-    initialize_database()
-    
-    # スケジューラー開始
-    venue_manager.start_background_updates()
-    
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
