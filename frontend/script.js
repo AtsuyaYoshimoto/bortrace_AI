@@ -964,6 +964,50 @@ function displayRealRacers(racers) {
         tbody.appendChild(row);
     });
 }
+
+// 展示タイム表示関数
+function displayExhibitionTimes(racers) {
+    const exhibitionGrid = document.getElementById('exhibition-grid');
+    if (!exhibitionGrid) return;
+    
+    exhibitionGrid.innerHTML = '';
+    
+    // モック展示タイムデータ
+    const exhibitionData = racers.map((racer, index) => ({
+        boat_number: racer.boat_number,
+        time: (6.8 + Math.random() * 0.4).toFixed(2),
+        rank: index + 1
+    }));
+    
+    // タイム順にソート
+    exhibitionData.sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
+    exhibitionData.forEach((item, index) => item.rank = index + 1);
+    
+    // 元の艇番順に戻して表示
+    exhibitionData.sort((a, b) => a.boat_number - b.boat_number);
+    
+    exhibitionData.forEach(item => {
+        const exhibitionItem = document.createElement('div');
+        exhibitionItem.className = `exhibition-item boat-${item.boat_number}`;
+        
+        exhibitionItem.innerHTML = `
+            <div class="exhibition-boat">${item.boat_number}号艇</div>
+            <div class="exhibition-time">${item.time}</div>
+            <div class="exhibition-rank">${item.rank}位</div>
+        `;
+        
+        exhibitionGrid.appendChild(exhibitionItem);
+    });
+}
+
+// displayRealRacers関数の最後に以下を追加
+function displayRealRacers(racers) {
+    // 既存のコード...
+    
+    // 最後に展示タイム表示を追加
+    displayExhibitionTimes(racers);
+}
+
 function updateTimestamp(timestamp) {
     const date = new Date(timestamp);
     const formatted = date.toLocaleString('ja-JP', {
