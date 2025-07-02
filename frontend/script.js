@@ -900,41 +900,70 @@ function updateRaceInfoFromSelected(data) {
         raceNumberElement.textContent = `${data.race_info.race_number}R`;
     }
 }
-// 実際の選手データを表示（追加が必要）
+
+// 既存のdisplayRealRacers関数を以下に置き換え
 function displayRealRacers(racers) {
-    const tbody = document.getElementById('racers-tbody');
+    const tbody = document.getElementById('racers-tbody-new');
+    if (!tbody) {
+        console.error('racers-tbody-new要素が見つかりません');
+        return;
+    }
+    
     tbody.innerHTML = '';
 
     racers.forEach((racer, index) => {
-        const row = document.createElement('tr');
-        row.className = 'fade-in';
+        const row = document.createElement('div');
+        row.className = 'racer-row fade-in';
         row.style.animationDelay = `${index * 0.1}s`;
         
-        // クラス別の色分け
-        let classColor = '';
-        switch(racer.class) {
-            case 'A1': classColor = 'class-a1'; break;
-            case 'A2': classColor = 'class-a2'; break;
-            case 'B1': classColor = 'class-b1'; break;
-            case 'B2': classColor = 'class-b2'; break;
-            default: classColor = 'class-b1';
-        }
+        // モック成績データ（実際のAPIデータに置き換え可能）
+        const mockStats = {
+            win_rate: (Math.random() * 8 + 2).toFixed(2),
+            place_rate: (Math.random() * 30 + 40).toFixed(1),
+            trio_rate: (Math.random() * 20 + 60).toFixed(1)
+        };
         
         row.innerHTML = `
-            <td><span class="player-number">${racer.boat_number}</span></td>
-            <td class="player-name">${racer.name}</td>
-            <td><span class="class-badge ${classColor}">${racer.class}</span></td>
-            <td>${racer.age}歳</td>
-            <td>${racer.weight}</td>
-            <td>${racer.region}</td>
-            <td>${racer.branch}</td>
-            <td>#${racer.registration_number}</td>
+            <div class="boat-number-cell">
+                <div class="boat-number-badge boat-${racer.boat_number}">
+                    ${racer.boat_number}
+                </div>
+            </div>
+            <div class="racer-info-cell">
+                <div class="racer-name">${racer.name}</div>
+                <div class="racer-details">
+                    <span class="grade-badge ${racer.class?.toLowerCase()}">${racer.class}</span>
+                    <span>${racer.age}歳</span>
+                    <span>${racer.weight}</span>
+                    <span>${racer.region}/${racer.branch}</span>
+                </div>
+            </div>
+            <div class="stats-cell">
+                <div class="stat-row">
+                    <span class="stat-label">勝率</span>
+                    <span class="stat-value">${mockStats.win_rate}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">2連率</span>
+                    <span class="stat-value">${mockStats.place_rate}%</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">3連率</span>
+                    <span class="stat-value">${mockStats.trio_rate}%</span>
+                </div>
+            </div>
+            <div class="motor-info-cell">
+                <div class="motor-number">#${Math.floor(Math.random() * 100) + 1}</div>
+                <div class="motor-rate">${(Math.random() * 20 + 30).toFixed(1)}%</div>
+            </div>
+            <div class="conditions-cell">
+                <i class="fas fa-arrow-up trend-up"></i>
+            </div>
         `;
         
         tbody.appendChild(row);
     });
 }
-
 function updateTimestamp(timestamp) {
     const date = new Date(timestamp);
     const formatted = date.toLocaleString('ja-JP', {
