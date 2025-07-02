@@ -1627,6 +1627,115 @@ footer {
     border: 2px solid #f1aeb5;
 }
 
+/* ===== 競艇サイト風出走表 ===== */
+.race-entry-table {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    margin-top: 2rem;
+}
+
+.table-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    display: grid;
+    grid-template-columns: 80px 1fr 200px 120px 100px;
+    padding: 1rem 0;
+    font-weight: 600;
+}
+
+.header-cell {
+    padding: 0 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.racer-row {
+    display: grid;
+    grid-template-columns: 80px 1fr 200px 120px 100px;
+    border-bottom: 1px solid #e9ecef;
+    padding: 1.5rem 0;
+    transition: background-color 0.3s;
+}
+
+.racer-row:hover {
+    background-color: rgba(0, 102, 204, 0.05);
+}
+
+.boat-number-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.boat-number-badge {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: white;
+}
+
+.boat-1 { background: #ffffff; color: #333; border: 3px solid #333; }
+.boat-2 { background: #000000; }
+.boat-3 { background: #ff0000; }
+.boat-4 { background: #0066ff; }
+.boat-5 { background: #ffff00; color: #333; }
+.boat-6 { background: #00ff00; color: #333; }
+
+.racer-info-cell {
+    padding: 0 1rem;
+}
+
+.racer-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--dark);
+    margin-bottom: 0.3rem;
+}
+
+.racer-details {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.grade-badge {
+    padding: 0.2rem 0.6rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.stats-cell {
+    padding: 0 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+}
+
+.stat-label {
+    color: #666;
+}
+
+.stat-value {
+    font-weight: 600;
+    color: var(--primary);
+}
+
 @keyframes pulse-yellow {
     0%, 100% { box-shadow: 0 4px 12px rgba(245, 224, 80, 0.3); }
     50% { box-shadow: 0 4px 12px rgba(245, 224, 80, 0.6); }
