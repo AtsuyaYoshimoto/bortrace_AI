@@ -17,6 +17,13 @@ import pytz
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+import redis
+from functools import lru_cache
+import logging.config
+import time
+from flask import g
 import logging
 logger = logging.getLogger(__name__)
 
@@ -32,6 +39,16 @@ except Exception as e:
     print(f"❌ AI model initialization failed: {e}")
     print(f"エラー詳細: {type(e).__name__}")
     AI_AVAILABLE = False
+
+class Config:
+    DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
+try:
+    redis_client = redis.Redis(host='localhost', port=6379, db=0)
+except:
+    redis_client = None
+
+request_count = 0
+start_time = datetime.now()
 
 print(f"🔍 AI初期化処理完了: AI_AVAILABLE = {AI_AVAILABLE}")
 
@@ -442,6 +459,16 @@ data_collector = BoatraceDataCollector()
 venue_manager = VenueDataManager()
 
 app = Flask(__name__)
+
+app.config.from_object(Config)
+
+# レート制限設定
+limiter = Limiter(
+    app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"]
+)
+
 CORS(app)
 
 @app.route('/')
