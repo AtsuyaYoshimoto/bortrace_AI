@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, make_response
+from flask import Flask, jsonify, request, make_response, g
 from flask_cors import CORS
 import os
 import requests
@@ -16,17 +16,89 @@ import os
 import pytz
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-import redis
 from functools import lru_cache
 import logging.config
-import time
-from flask import g
-import logging
-logger = logging.getLogger(__name__)
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
+# Redis import (optional)
+try:
+    import redis
+    REDIS_AVAILABLE = True
+except ImportError:
+    REDIS_AVAILABLE = False
+
+sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
+
+# ===== 設定クラス =====
+class Config:
+    DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
+    REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379')
+    API_RATE_LIMIT = os.environ.get('API_RATE_LIMIT', '100 per hour')
+    CACHE_TIMEOUT = int(os.environ.get('CACHE_TIMEOUT', '300'))
+    LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
+
+# ===== ログ設定 =====
+LOGGING_CONFIG = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'detailed': {
+            'format': '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s'
+        },
+        'simple': {
+            'format': '%(levelname)s - %(message)s'
+        }
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'level': 'INFO',
+            'formatter': 'simple',
+            'stream': 'ext://sys.stdout'
+        },
+        'file': {
+            'class': 'logging.FileHandler',
+            'filename': 'boatrace_api.log',
+            'level': 'DEBUG',
+            'formatter': 'detailed',
+            'mode': 'a'
+        }
+    },
+    'loggers': {
+        'boatrace': {
+            'level': 'DEBUG',
+            'handlers': ['console', 'file'],
+            'propagate': False
+        }
+    },
+    'root': {
+        'level': 'INFO',
+        'handlers': ['console']
+    }
+}
+
+logging.config.dictConfig(LOGGING_CONFIG)
+logger = logging.getLogger('boatrace')
+
+# ===== Redis・キャッシュ設定 =====
+redis_client = None
+if REDIS_AVAILABLE:
+    try:
+        redis_client = redis.Redis(
+            host=os.environ.get('REDIS_HOST', 'localhost'),
+            port=int(os.environ.get('REDIS_PORT', '6379')),
+            db=int(os.environ.get('REDIS_DB', '0')),
+            decode_responses=True,
+            socket_timeout=5
+        )
+        redis_client.ping()
+        logger.info("Redis接続成功")
+    except Exception as e:
+        logger.warning(f"Redis接続失敗: {e}")
+        redis_client = None
+
+# ===== AI初期化 =====
 print("🔍 sys.path設定完了、インポート開始...")
 
 try:
@@ -40,17 +112,13 @@ except Exception as e:
     print(f"エラー詳細: {type(e).__name__}")
     AI_AVAILABLE = False
 
-class Config:
-    DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
-try:
-    redis_client = redis.Redis(host='localhost', port=6379, db=0)
-except:
-    redis_client = None
-
-request_count = 0
-start_time = datetime.now()
-
 print(f"🔍 AI初期化処理完了: AI_AVAILABLE = {AI_AVAILABLE}")
+
+# ===== グローバル変数・メトリクス =====
+request_count = 0
+error_count = 0
+start_time = datetime.now()
+response_times = []
 
 import threading
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -108,7 +176,75 @@ def extract_racer_data_final(html_content):
         }
         
     except Exception as e:
+        logger.error(f"選手データ抽出エラー: {str(e)}")
         return {"status": "error", "message": str(e)}
+
+# ===== レスポンス標準化関数 =====
+def create_response(data=None, error=None, status_code=200, message=None):
+    """レスポンス標準化"""
+    response = {
+        "timestamp": datetime.now().isoformat(),
+        "status_code": status_code,
+        "success": error is None
+    }
+    
+    if data is not None:
+        response["data"] = data
+    if error is not None:
+        response["error"] = error
+    if message is not None:
+        response["message"] = message
+        
+    return jsonify(response), status_code
+
+# ===== キャッシュ関数 =====
+def get_from_cache(key):
+    """キャッシュから取得"""
+    if redis_client:
+        try:
+            return redis_client.get(key)
+        except Exception as e:
+            logger.warning(f"Redis取得エラー: {e}")
+    return None
+
+def set_to_cache(key, value, timeout=300):
+    """キャッシュに保存"""
+    if redis_client:
+        try:
+            redis_client.setex(key, timeout, value)
+        except Exception as e:
+            logger.warning(f"Redis保存エラー: {e}")
+
+@lru_cache(maxsize=100)
+def get_venue_info_cached(venue_code):
+    """会場情報キャッシュ取得"""
+    venues = {
+        "01": {"name": "桐生", "location": "群馬県", "region": "関東"},
+        "02": {"name": "戸田", "location": "埼玉県", "region": "関東"},
+        "03": {"name": "江戸川", "location": "東京都", "region": "関東"},
+        "04": {"name": "平和島", "location": "東京都", "region": "関東"},
+        "05": {"name": "多摩川", "location": "東京都", "region": "関東"},
+        "06": {"name": "浜名湖", "location": "静岡県", "region": "中部"},
+        "07": {"name": "蒲郡", "location": "愛知県", "region": "中部"},
+        "08": {"name": "常滑", "location": "愛知県", "region": "中部"},
+        "09": {"name": "津", "location": "三重県", "region": "中部"},
+        "10": {"name": "三国", "location": "福井県", "region": "中部"},
+        "11": {"name": "びわこ", "location": "滋賀県", "region": "関西"},
+        "12": {"name": "住之江", "location": "大阪府", "region": "関西"},
+        "13": {"name": "尼崎", "location": "兵庫県", "region": "関西"},
+        "14": {"name": "鳴門", "location": "徳島県", "region": "中国・四国"},
+        "15": {"name": "丸亀", "location": "香川県", "region": "中国・四国"},
+        "16": {"name": "児島", "location": "岡山県", "region": "中国・四国"},
+        "17": {"name": "宮島", "location": "広島県", "region": "中国・四国"},
+        "18": {"name": "徳山", "location": "山口県", "region": "中国・四国"},
+        "19": {"name": "下関", "location": "山口県", "region": "中国・四国"},
+        "20": {"name": "若松", "location": "福岡県", "region": "九州"},
+        "21": {"name": "芦屋", "location": "福岡県", "region": "九州"},
+        "22": {"name": "福岡", "location": "福岡県", "region": "九州"},
+        "23": {"name": "唐津", "location": "佐賀県", "region": "九州"},
+        "24": {"name": "大村", "location": "長崎県", "region": "九州"}
+    }
+    return venues.get(venue_code)
 
 # ===== 新しいBoatraceDataCollectorクラス =====
 
@@ -458,46 +594,183 @@ class VenueDataManager:
 data_collector = BoatraceDataCollector()
 venue_manager = VenueDataManager()
 
+# ===== Flask アプリ初期化 =====
 app = Flask(__name__)
+CORS(app)
 
+# 設定適用
 app.config.from_object(Config)
 
 # レート制限設定
 limiter = Limiter(
     app,
     key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"]
+    default_limits=["1000 per hour", "50 per minute"]
 )
 
-CORS(app)
+# ===== リクエスト処理フック =====
+@app.before_request
+def before_request():
+    global request_count
+    request_count += 1
+    g.start_time = time.time()
+    
+    logger.info(f"Request: {request.method} {request.path}", extra={
+        "method": request.method,
+        "path": request.path,
+        "user_agent": request.user_agent.string,
+        "remote_addr": request.remote_addr
+    })
 
+@app.after_request
+def after_request(response):
+    global response_times
+    
+    duration = time.time() - g.start_time
+    response_times.append(duration)
+    
+    # 最新100件のレスポンス時間のみ保持
+    if len(response_times) > 100:
+        response_times = response_times[-100:]
+    
+    logger.info(f"Response: {response.status_code} - {duration:.3f}s")
+    
+    # セキュリティヘッダー追加
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    
+    return response
+
+# ===== エラーハンドラー =====
+@app.errorhandler(404)
+def not_found_error(error):
+    global error_count
+    error_count += 1
+    
+    logger.warning(f"404 Error: {request.path}")
+    
+    return create_response(
+        error="エンドポイントが見つかりません",
+        status_code=404,
+        message=f"パス '{request.path}' は存在しません"
+    )
+
+@app.errorhandler(500)
+def internal_error(error):
+    global error_count
+    error_count += 1
+    
+    logger.error(f"500 Error: {str(error)}")
+    
+    return create_response(
+        error="内部サーバーエラー",
+        status_code=500,
+        message="サーバーで予期しないエラーが発生しました"
+    )
+
+@app.errorhandler(429)
+def ratelimit_error(error):
+    logger.warning(f"Rate limit exceeded: {request.remote_addr}")
+    
+    return create_response(
+        error="レート制限に達しました",
+        status_code=429,
+        message="リクエストが多すぎます。しばらく時間をおいて再試行してください"
+    )
+
+# ===== 基本エンドポイント =====
 @app.route('/')
 def index():
-    return "競艇予想AI API サーバー - 全競艇場対応版"
+    return jsonify({
+        "service": "競艇予想AI API サーバー",
+        "version": "2.0.0",
+        "status": "running",
+        "ai_available": AI_AVAILABLE,
+        "features": ["全競艇場対応", "AI予想", "リアルタイムデータ", "キャッシュ機能"]
+    })
 
 @app.route('/api/test', methods=['GET'])
+@limiter.limit("100 per minute")
 def test():
-    return jsonify({"status": "success", "message": "API is working!"})
+    return create_response(
+        data={"message": "API is working!"},
+        message="API正常動作中"
+    )
 
+# ===== 新規APIエンドポイント =====
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    uptime = (datetime.now() - start_time).total_seconds()
+    avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+    
+    health_data = {
+        "status": "healthy",
+        "uptime_seconds": uptime,
+        "uptime_formatted": str(timedelta(seconds=int(uptime))),
+        "version": "2.0.0",
+        "ai_available": AI_AVAILABLE,
+        "redis_available": redis_client is not None,
+        "total_requests": request_count,
+        "error_count": error_count,
+        "avg_response_time": round(avg_response_time, 3),
+        "memory_usage": "N/A"  # 必要に応じてpsutilで実装
+    }
+    
+    return create_response(data=health_data)
+
+@app.route('/api/metrics', methods=['GET'])
+@limiter.limit("10 per minute")
+def get_metrics():
+    uptime = (datetime.now() - start_time).total_seconds()
+    
+    metrics = {
+        "requests": {
+            "total": request_count,
+            "errors": error_count,
+            "success_rate": (request_count - error_count) / request_count if request_count > 0 else 0
+        },
+        "performance": {
+            "avg_response_time": sum(response_times) / len(response_times) if response_times else 0,
+            "min_response_time": min(response_times) if response_times else 0,
+            "max_response_time": max(response_times) if response_times else 0
+        },
+        "system": {
+            "uptime_seconds": uptime,
+            "ai_available": AI_AVAILABLE,
+            "redis_available": redis_client is not None,
+            "active_cache_entries": len(venue_manager.venue_cache)
+        }
+    }
+    
+    return create_response(data=metrics)
+
+# ===== 競艇データAPI =====
 @app.route('/api/races/today', methods=['GET'])
+@limiter.limit("30 per minute")
 def get_today_races():
-    races = [
-        {"race_id": "202505251201", "venue": "住之江", "race_number": 12}
-    ]
-    return jsonify(races)
+    try:
+        races = [
+            {"race_id": "202505251201", "venue": "住之江", "race_number": 12}
+        ]
+        return create_response(data=races)
+    except Exception as e:
+        logger.error(f"今日のレース取得エラー: {str(e)}")
+        return create_response(error=str(e), status_code=500)
 
 @app.route('/api/prediction/<race_id>', methods=['GET', 'POST'])
+@limiter.limit("20 per minute")
 def get_race_prediction(race_id):
     try:
         if not AI_AVAILABLE:
-            return jsonify(get_mock_prediction(race_id))
+            return create_response(data=get_mock_prediction(race_id))
             
         prediction = ai_model.get_race_prediction(race_id)
-        return jsonify(prediction)
+        return create_response(data=prediction)
         
     except Exception as e:
-        print(f"AI予想エラー: {str(e)}")
-        return jsonify(get_mock_prediction(race_id))
+        logger.error(f"AI予想エラー: {str(e)}")
+        return create_response(data=get_mock_prediction(race_id))
 
 def get_mock_prediction(race_id):
     # 既存のモックデータをここに移動
@@ -519,128 +792,154 @@ def get_mock_prediction(race_id):
         }
     }
 
-# 既存のエンドポイント（残す）
+# 既存のエンドポイント（レスポンス形式修正）
 @app.route('/api/stats', methods=['GET'])
+@limiter.limit("30 per minute")
 def get_performance_stats():
-    stats = {
-        "period": "過去30日間",
-        "race_count": 150,
-        "avg_hit_rate": 0.75,
-        "win_hit_rate": 0.945,
-        "exacta_hit_rate": 0.823,
-        "quinella_hit_rate": 0.887,
-        "trio_hit_rate": 0.678
-    }
-    return jsonify(stats)
+    try:
+        stats = {
+            "period": "過去30日間",
+            "race_count": 150,
+            "avg_hit_rate": 0.75,
+            "win_hit_rate": 0.945,
+            "exacta_hit_rate": 0.823,
+            "quinella_hit_rate": 0.887,
+            "trio_hit_rate": 0.678
+        }
+        return create_response(data=stats)
+    except Exception as e:
+        logger.error(f"統計データ取得エラー: {str(e)}")
+        return create_response(error=str(e), status_code=500)
 
-# 会場コード一覧エンドポイント（拡張版）
+# 会場コード一覧エンドポイント（レスポンス形式修正）
 @app.route('/api/venues', methods=['GET'])
+@limiter.limit("50 per minute")
 def get_venues():
-    venues = {
-        "01": {"name": "桐生", "location": "群馬県", "region": "関東"},
-        "02": {"name": "戸田", "location": "埼玉県", "region": "関東"},
-        "03": {"name": "江戸川", "location": "東京都", "region": "関東"},
-        "04": {"name": "平和島", "location": "東京都", "region": "関東"},
-        "05": {"name": "多摩川", "location": "東京都", "region": "関東"},
-        "06": {"name": "浜名湖", "location": "静岡県", "region": "中部"},
-        "07": {"name": "蒲郡", "location": "愛知県", "region": "中部"},
-        "08": {"name": "常滑", "location": "愛知県", "region": "中部"},
-        "09": {"name": "津", "location": "三重県", "region": "中部"},
-        "10": {"name": "三国", "location": "福井県", "region": "中部"},
-        "11": {"name": "びわこ", "location": "滋賀県", "region": "関西"},
-        "12": {"name": "住之江", "location": "大阪府", "region": "関西"},
-        "13": {"name": "尼崎", "location": "兵庫県", "region": "関西"},
-        "14": {"name": "鳴門", "location": "徳島県", "region": "中国・四国"},
-        "15": {"name": "丸亀", "location": "香川県", "region": "中国・四国"},
-        "16": {"name": "児島", "location": "岡山県", "region": "中国・四国"},
-        "17": {"name": "宮島", "location": "広島県", "region": "中国・四国"},
-        "18": {"name": "徳山", "location": "山口県", "region": "中国・四国"},
-        "19": {"name": "下関", "location": "山口県", "region": "中国・四国"},
-        "20": {"name": "若松", "location": "福岡県", "region": "九州"},
-        "21": {"name": "芦屋", "location": "福岡県", "region": "九州"},
-        "22": {"name": "福岡", "location": "福岡県", "region": "九州"},
-        "23": {"name": "唐津", "location": "佐賀県", "region": "九州"},
-        "24": {"name": "大村", "location": "長崎県", "region": "九州"}
-    }
-    return jsonify(venues)
+    try:
+        # キャッシュから取得試行
+        cache_key = "venues_data"
+        cached_data = get_from_cache(cache_key)
+        
+        if cached_data:
+            import json
+            venues = json.loads(cached_data)
+        else:
+            venues = {
+                "01": {"name": "桐生", "location": "群馬県", "region": "関東"},
+                "02": {"name": "戸田", "location": "埼玉県", "region": "関東"},
+                "03": {"name": "江戸川", "location": "東京都", "region": "関東"},
+                "04": {"name": "平和島", "location": "東京都", "region": "関東"},
+                "05": {"name": "多摩川", "location": "東京都", "region": "関東"},
+                "06": {"name": "浜名湖", "location": "静岡県", "region": "中部"},
+                "07": {"name": "蒲郡", "location": "愛知県", "region": "中部"},
+                "08": {"name": "常滑", "location": "愛知県", "region": "中部"},
+                "09": {"name": "津", "location": "三重県", "region": "中部"},
+                "10": {"name": "三国", "location": "福井県", "region": "中部"},
+                "11": {"name": "びわこ", "location": "滋賀県", "region": "関西"},
+                "12": {"name": "住之江", "location": "大阪府", "region": "関西"},
+                "13": {"name": "尼崎", "location": "兵庫県", "region": "関西"},
+                "14": {"name": "鳴門", "location": "徳島県", "region": "中国・四国"},
+                "15": {"name": "丸亀", "location": "香川県", "region": "中国・四国"},
+                "16": {"name": "児島", "location": "岡山県", "region": "中国・四国"},
+                "17": {"name": "宮島", "location": "広島県", "region": "中国・四国"},
+                "18": {"name": "徳山", "location": "山口県", "region": "中国・四国"},
+                "19": {"name": "下関", "location": "山口県", "region": "中国・四国"},
+                "20": {"name": "若松", "location": "福岡県", "region": "九州"},
+                "21": {"name": "芦屋", "location": "福岡県", "region": "九州"},
+                "22": {"name": "福岡", "location": "福岡県", "region": "九州"},
+                "23": {"name": "唐津", "location": "佐賀県", "region": "九州"},
+                "24": {"name": "大村", "location": "長崎県", "region": "九州"}
+            }
+            
+            # キャッシュに保存
+            import json
+            set_to_cache(cache_key, json.dumps(venues), 3600)  # 1時間キャッシュ
+        
+        return create_response(data=venues)
+    except Exception as e:
+        logger.error(f"会場データ取得エラー: {str(e)}")
+        return create_response(error=str(e), status_code=500)
 
 # ===== 新しいAPIエンドポイント =====
 
 @app.route('/api/race-entries/<venue_code>/<race_number>', methods=['GET'])
+@limiter.limit("20 per minute")
 def get_race_entries_api(venue_code, race_number):
     """出走表情報API"""
     try:
         # バリデーション
         if venue_code not in [f"{i:02d}" for i in range(1, 25)]:
-            return jsonify({
-                "error": "無効な会場コードです",
-                "valid_codes": "01-24"
-            }), 400
+            return create_response(
+                error="無効な会場コードです",
+                status_code=400,
+                message="会場コードは01-24の範囲で指定してください"
+            )
             
         if not race_number.isdigit() or not (1 <= int(race_number) <= 12):
-            return jsonify({
-                "error": "無効なレース番号です", 
-                "valid_range": "1-12"
-            }), 400
+            return create_response(
+                error="無効なレース番号です",
+                status_code=400,
+                message="レース番号は1-12の範囲で指定してください"
+            )
         
         # 出走表取得
         entries = venue_manager.get_race_entries(venue_code, race_number)
         
         if entries and entries.get("status") == "success":
             # 会場情報も追加
-            venues = get_venues().get_json()
-            venue_info = venues.get(venue_code, {"name": "不明", "location": "不明"})
+            venue_info = get_venue_info_cached(venue_code)
             
-            return jsonify({
+            response_data = {
                 "venue_code": venue_code,
-                "venue_name": venue_info["name"],
+                "venue_name": venue_info["name"] if venue_info else "不明",
                 "race_number": race_number,
-                "entries": entries,
-                "timestamp": datetime.now().isoformat()
-            })
+                "entries": entries
+            }
+            
+            return create_response(data=response_data)
         else:
-            return jsonify({
-                "error": "出走表データ取得失敗",
-                "venue_code": venue_code,
-                "race_number": race_number,
-                "suggestion": "レース開催状況を確認してください"
-            }), 404
+            return create_response(
+                error="出走表データ取得失敗",
+                status_code=404,
+                message="レース開催状況を確認してください"
+            )
             
     except Exception as e:
         logger.error(f"出走表API エラー: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return create_response(error=str(e), status_code=500)
 
 @app.route('/api/venue-status-new/<venue_code>', methods=['GET'])
+@limiter.limit("30 per minute")
 def get_venue_status_new(venue_code):
     """新しい会場ステータスAPI（キャッシュから高速取得）"""
     try:
         if venue_code not in [f"{i:02d}" for i in range(1, 25)]:
-            return jsonify({
-                "error": "無効な会場コードです",
-                "valid_codes": "01-24"
-            }), 400
+            return create_response(
+                error="無効な会場コードです",
+                status_code=400
+            )
         
         # キャッシュから取得
         status = venue_manager.get_venue_status(venue_code)
         
         # 会場名情報を追加
-        venues = get_venues().get_json()
-        venue_info = venues.get(venue_code, {"name": "不明", "location": "不明"})
+        venue_info = get_venue_info_cached(venue_code)
         
-        return jsonify({
+        response_data = {
             "venue_code": venue_code,
-            "venue_name": venue_info["name"],
-            "venue_location": venue_info["location"],
-            "status": status,
-            "timestamp": datetime.now().isoformat(),
-            "note": "キャッシュからの高速取得"
-        })
+            "venue_name": venue_info["name"] if venue_info else "不明",
+            "venue_location": venue_info["location"] if venue_info else "不明",
+            "status": status
+        }
+        
+        return create_response(data=response_data, message="キャッシュからの高速取得")
         
     except Exception as e:
         logger.error(f"会場ステータスAPI エラー: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return create_response(error=str(e), status_code=500)
 
 @app.route('/api/daily-races', methods=['GET'])
+@limiter.limit("20 per minute")
 def get_daily_races():
     """本日開催中の全会場情報API"""
     try:
@@ -648,74 +947,76 @@ def get_daily_races():
         
         for venue_code, venue_data in venue_manager.venue_cache.items():
             if venue_data.get('is_active', False):
-                venues = get_venues().get_json()
-                venue_info = venues.get(venue_code, {"name": "不明", "location": "不明"})
+                venue_info = get_venue_info_cached(venue_code)
                 
-                active_venues.append({
+                venue_summary = {
                     "venue_code": venue_code,
-                    "venue_name": venue_info["name"],
-                    "venue_location": venue_info["location"],
+                    "venue_name": venue_info["name"] if venue_info else "不明",
+                    "venue_location": venue_info["location"] if venue_info else "不明",
                     "race_count": venue_data.get('race_count', 0),
                     "races": venue_data.get('races', []),
                     "last_updated": venue_data.get('last_updated')
-                })
+                }
+                
+                active_venues.append(venue_summary)
         
-        return jsonify({
+        response_data = {
             "date": get_today_date(),
             "active_venue_count": len(active_venues),
-            "venues": active_venues,
-            "timestamp": datetime.now().isoformat(),
-            "note": "0時更新の日次データ"
-        })
+            "venues": active_venues
+        }
+        
+        return create_response(data=response_data, message="0時更新の日次データ")
         
     except Exception as e:
         logger.error(f"日次レースAPI エラー: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return create_response(error=str(e), status_code=500)
 
 @app.route('/api/pre-race-info/<venue_code>/<race_number>', methods=['GET'])
+@limiter.limit("20 per minute")
 def get_pre_race_info_api(venue_code, race_number):
     """直前情報API（展示タイム・天候等）"""
     try:
         # バリデーション
         if venue_code not in [f"{i:02d}" for i in range(1, 25)]:
-            return jsonify({
-                "error": "無効な会場コードです",
-                "valid_codes": "01-24"
-            }), 400
+            return create_response(
+                error="無効な会場コードです",
+                status_code=400
+            )
             
         if not race_number.isdigit() or not (1 <= int(race_number) <= 12):
-            return jsonify({
-                "error": "無効なレース番号です",
-                "valid_range": "1-12"
-            }), 400
+            return create_response(
+                error="無効なレース番号です",
+                status_code=400
+            )
         
         # 直前情報取得
         pre_race_info = data_collector.get_pre_race_info(venue_code, race_number)
         
         if pre_race_info:
-            venues = get_venues().get_json()
-            venue_info = venues.get(venue_code, {"name": "不明", "location": "不明"})
+            venue_info = get_venue_info_cached(venue_code)
             
-            return jsonify({
+            response_data = {
                 "venue_code": venue_code,
-                "venue_name": venue_info["name"],
+                "venue_name": venue_info["name"] if venue_info else "不明",
                 "race_number": race_number,
-                "pre_race_info": pre_race_info,
-                "timestamp": datetime.now().isoformat()
-            })
+                "pre_race_info": pre_race_info
+            }
+            
+            return create_response(data=response_data)
         else:
-            return jsonify({
-                "error": "直前情報取得失敗",
-                "venue_code": venue_code,
-                "race_number": race_number,
-                "suggestion": "展示タイム発表前またはレース未開催"
-            }), 404
+            return create_response(
+                error="直前情報取得失敗",
+                status_code=404,
+                message="展示タイム発表前またはレース未開催"
+            )
             
     except Exception as e:
         logger.error(f"直前情報API エラー: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return create_response(error=str(e), status_code=500)
 
 @app.route('/api/system-status', methods=['GET'])
+@limiter.limit("60 per minute")
 def get_system_status():
     """システム全体のステータス確認API"""
     try:
@@ -727,7 +1028,7 @@ def get_system_status():
             if v.get('last_updated')
         ]
         
-        return jsonify({
+        system_data = {
             "system_status": "running",
             "ai_available": AI_AVAILABLE,
             "data_collection": {
@@ -737,12 +1038,18 @@ def get_system_status():
                 "last_update": max(last_updates) if last_updates else None
             },
             "scheduler_running": venue_manager.scheduler.running,
-            "timestamp": datetime.now().isoformat()
-        })
+            "performance": {
+                "total_requests": request_count,
+                "error_count": error_count,
+                "avg_response_time": sum(response_times) / len(response_times) if response_times else 0
+            }
+        }
+        
+        return create_response(data=system_data)
         
     except Exception as e:
         logger.error(f"システムステータス エラー: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return create_response(error=str(e), status_code=500)
 
 # ===== データベース関連 =====
 
@@ -805,9 +1112,14 @@ def initialize_database():
     conn.close()
 
 @app.route('/api/init-db', methods=['POST'])
+@limiter.limit("2 per hour")
 def init_database():
-    initialize_database()
-    return jsonify({"status": "Database initialized"})
+    try:
+        initialize_database()
+        return create_response(message="Database initialized successfully")
+    except Exception as e:
+        logger.error(f"データベース初期化エラー: {str(e)}")
+        return create_response(error=str(e), status_code=500)
 
 # ===== 既存のスクレイピング関連エンドポイント（保持） =====
 
@@ -844,6 +1156,7 @@ def get_race_info_improved(race_url):
 
 # 拡張版のスクレイピングエンドポイント
 @app.route('/api/race-data', methods=['GET'])
+@limiter.limit("30 per minute")
 def get_race_data():
     """拡張版：任意の会場・レースのデータ取得"""
     try:
@@ -854,39 +1167,37 @@ def get_race_data():
         
         # バリデーション
         if venue_code not in [f"{i:02d}" for i in range(1, 25)]:
-            return jsonify({
-                "error": "無効な会場コードです",
-                "valid_codes": "01-24"
-            }), 400
+            return create_response(
+                error="無効な会場コードです",
+                status_code=400
+            )
             
         if not race_number.isdigit() or not (1 <= int(race_number) <= 12):
-            return jsonify({
-                "error": "無効なレース番号です",
-                "valid_range": "1-12"
-            }), 400
+            return create_response(
+                error="無効なレース番号です",
+                status_code=400
+            )
         
         # URLを構築
         race_url = build_race_url(venue_code, race_number, date_str)
         
-        print(f"データ取得開始... URL: {race_url}")
+        logger.info(f"データ取得開始... URL: {race_url}")
         race_data = get_race_info_improved(race_url)
         
         if race_data["status"] == "error":
-            return jsonify({
-                "error": "データ取得失敗",
-                "message": race_data["message"],
-                "suggestion": "30分後に再試行してください",
-                "url": race_url
-            }), 500
+            return create_response(
+                error="データ取得失敗",
+                status_code=500,
+                message=race_data["message"]
+            )
         
-        print("選手データ抽出開始...")
+        logger.info("選手データ抽出開始...")
         racer_data = extract_racer_data_final(race_data["content"])
         
         # 会場情報を取得
-        venues = get_venues().get_json()
-        venue_info = venues.get(venue_code, {"name": "不明", "location": "不明"})
+        venue_info = get_venue_info_cached(venue_code)
         
-        return jsonify({
+        response_data = {
             "data_acquisition": {
                 "status": race_data["status"],
                 "length": race_data["length"],
@@ -895,50 +1206,51 @@ def get_race_data():
             },
             "race_info": {
                 "venue_code": venue_code,
-                "venue_name": venue_info["name"],
-                "venue_location": venue_info["location"],
+                "venue_name": venue_info["name"] if venue_info else "不明",
+                "venue_location": venue_info["location"] if venue_info else "不明",
                 "race_number": race_number,
                 "date": date_str
             },
-            "racer_extraction": racer_data,
-            "timestamp": datetime.now().isoformat()
-        })
+            "racer_extraction": racer_data
+        }
+        
+        return create_response(data=response_data)
         
     except Exception as e:
-        return jsonify({
-            "error": str(e),
-            "suggestion": "システム側の問題です。後ほど再試行してください。"
-        }), 500
+        logger.error(f"レースデータ取得エラー: {str(e)}")
+        return create_response(error=str(e), status_code=500)
 
-@app.route('/api/real-data-test', methods=['GET'])  
+@app.route('/api/real-data-test', methods=['GET'])
+@limiter.limit("20 per minute")
 def real_data_test():
     """既存エンドポイント（桐生1R・キャッシュ対応版）"""
     cache_key = "real_data_test_01"
     
-    # キャッシュ確認
-    cached_result = get_cached_data(cache_key, 30)  # 30分キャッシュ
-    if cached_result:
-        print("キャッシュからデータを返却")
-        return jsonify(cached_result)
-    
     try:
+        # キャッシュ確認
+        cached_result = get_from_cache(cache_key)
+        if cached_result:
+            logger.info("キャッシュからデータを返却")
+            import json
+            return create_response(data=json.loads(cached_result))
+        
         venue_code = '01'
         race_number = '1'
         date_str = get_today_date()
         
         race_url = build_race_url(venue_code, race_number, date_str)
         
-        print("データ取得開始...")
+        logger.info("データ取得開始...")
         race_data = get_race_info_improved(race_url)
         
         if race_data["status"] == "error":
-            return jsonify({
-                "error": "データ取得失敗",
-                "message": race_data["message"],
-                "suggestion": "30分後に再試行してください"
-            })
+            return create_response(
+                error="データ取得失敗",
+                status_code=500,
+                message=race_data["message"]
+            )
         
-        print("選手データ抽出開始...")
+        logger.info("選手データ抽出開始...")
         racer_data = extract_racer_data_final(race_data["content"])
         
         result = {
@@ -948,84 +1260,80 @@ def real_data_test():
                 "encoding": race_data["encoding"]
             },
             "racer_extraction": racer_data,
-            "timestamp": datetime.now().isoformat(),
             "html_sample": str(race_data["content"][:500])
         }
         
         # キャッシュに保存
-        set_cached_data(cache_key, result)
+        import json
+        set_to_cache(cache_key, json.dumps(result), 1800)  # 30分キャッシュ
         
-        return jsonify(result)
+        return create_response(data=result)
         
     except Exception as e:
-        return jsonify({
-            "error": str(e),
-            "suggestion": "システム側の問題です。後ほど再試行してください。"
-        })
+        logger.error(f"リアルデータテストエラー: {str(e)}")
+        return create_response(error=str(e), status_code=500)
 
 @app.route('/api/kyotei/<venue_code>', methods=['GET'])
+@limiter.limit("30 per minute")
 def get_kyotei_data(venue_code):
     """指定された競艇場のデータを取得（キャッシュ対応版）"""
     cache_key = f"kyotei_data_{venue_code}"
     
-    # キャッシュ確認
-    cached_result = get_cached_data(cache_key, 30)  # 30分キャッシュ
-    if cached_result:
-        print(f"キャッシュからデータを返却: {venue_code}")
-        return jsonify(cached_result)
-    
     try:
+        # キャッシュ確認
+        cached_result = get_from_cache(cache_key)
+        if cached_result:
+            logger.info(f"キャッシュからデータを返却: {venue_code}")
+            import json
+            return create_response(data=json.loads(cached_result))
+        
         # 今日の日付を取得
         today = datetime.now().strftime("%Y%m%d")
         
         # 動的なURL生成（venue_codeを使用）
         race_url = f"https://boatrace.jp/owpc/pc/race/racelist?rno=1&jcd={venue_code}&hd={today}"
         
-        print(f"データ取得開始... 会場コード: {venue_code}")
+        logger.info(f"データ取得開始... 会場コード: {venue_code}")
         race_data = get_race_info_improved(race_url)
         
         if race_data["status"] == "error":
-            return jsonify({
-                "error": "データ取得失敗",
-                "venue_code": venue_code,
-                "message": race_data["message"],
-                "suggestion": "30分後に再試行してください"
-            })
+            return create_response(
+                error="データ取得失敗",
+                status_code=500,
+                message=race_data["message"]
+            )
         
-        print("選手データ抽出開始...")
+        logger.info("選手データ抽出開始...")
         racer_data = extract_racer_data_final(race_data["content"])
         
         # 会場名を取得
-        venues = get_venues().get_json()
-        venue_info = venues.get(venue_code, {"name": "不明", "location": "不明"})
+        venue_info = get_venue_info_cached(venue_code)
         
         result = {
             "venue_code": venue_code,
-            "venue_name": venue_info["name"],
+            "venue_name": venue_info["name"] if venue_info else "不明",
             "data_acquisition": {
                 "status": race_data["status"],
                 "length": race_data["length"],
                 "encoding": race_data["encoding"]
             },
             "racer_extraction": racer_data,
-            "timestamp": datetime.now().isoformat(),
             "race_url": race_url
         }
         
         # キャッシュに保存
-        set_cached_data(cache_key, result)
+        import json
+        set_to_cache(cache_key, json.dumps(result), 1800)  # 30分キャッシュ
         
-        return jsonify(result)
+        return create_response(data=result)
         
     except Exception as e:
-        return jsonify({
-            "error": str(e),
-            "venue_code": venue_code,
-            "suggestion": "システム側の問題です。後ほど再試行してください。"
-        })
+        logger.error(f"会場データ取得エラー: {str(e)}")
+        return create_response(error=str(e), status_code=500)
 
 # 複数レースの一括取得エンドポイント
 @app.route('/api/venue-races', methods=['GET'])
+@limiter.limit("10 per minute")
 def get_venue_races():
     """指定会場の全レース情報を取得"""
     try:
@@ -1073,27 +1381,25 @@ def get_venue_races():
                 })
         
         # 会場情報を取得
-        venues = get_venues().get_json()
-        venue_info = venues.get(venue_code, {"name": "不明", "location": "不明"})
+        venue_info = get_venue_info_cached(venue_code)
         
-        return jsonify({
+        response_data = {
             "venue_info": {
                 "code": venue_code,
-                "name": venue_info["name"],
-                "location": venue_info["location"]
+                "name": venue_info["name"] if venue_info else "不明",
+                "location": venue_info["location"] if venue_info else "不明"
             },
             "date": date_str,
             "races": results,
             "total_races": len(results),
-            "successful_races": len([r for r in results if r["status"] == "success"]),
-            "timestamp": datetime.now().isoformat()
-        })
+            "successful_races": len([r for r in results if r["status"] == "success"])
+        }
+        
+        return create_response(data=response_data)
         
     except Exception as e:
-        return jsonify({
-            "error": str(e),
-            "suggestion": "システム側の問題です。後ほど再試行してください。"
-        }), 500
+        logger.error(f"会場レース一括取得エラー: {str(e)}")
+        return create_response(error=str(e), status_code=500)
 
 # ===== キャッシュ関連 =====
 
@@ -1117,82 +1423,89 @@ def set_cached_data(cache_key, data):
 # ===== AI関連エンドポイント =====
 
 @app.route('/api/race-features/<race_id>', methods=['GET'])
+@limiter.limit("20 per minute")
 def get_race_features(race_id):
     try:
         if not AI_AVAILABLE:
-            return jsonify({"error": "AI model not available"}), 503
+            return create_response(error="AI model not available", status_code=503)
             
         features = ai_model.feature_extractor.get_race_features(race_id)
-        return jsonify(features)
+        return create_response(data=features)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"レース特徴取得エラー: {str(e)}")
+        return create_response(error=str(e), status_code=500)
 
 @app.route('/api/ai-predict', methods=['POST'])
+@limiter.limit("10 per minute")
 def ai_predict():
     if not AI_AVAILABLE:
-        return jsonify({"error": "AI model not available"}), 503
+        return create_response(error="AI model not available", status_code=503)
     
-    data = request.get_json()
     try:
+        data = request.get_json()
         prediction = ai_model.predict(data['racers'])
-        return jsonify({"prediction": prediction})
+        return create_response(data={"prediction": prediction})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"AI予測エラー: {str(e)}")
+        return create_response(error=str(e), status_code=500)
 
 @app.route('/api/ai-status')
+@limiter.limit("60 per minute")
 def ai_status():
-    return jsonify({
+    return create_response(data={
         "ai_available": AI_AVAILABLE,
         "status": "ok",
         "model_type": "deep_learning" if AI_AVAILABLE else "mock"
     })
 
 @app.route('/api/ai-debug')
+@limiter.limit("5 per minute")
 def ai_debug():
     import traceback
     try:
         from boat_race_prediction_system import BoatRaceAI
         model = BoatRaceAI()
-        return jsonify({"status": "success", "message": "AI model loaded"})
+        return create_response(data={"message": "AI model loaded successfully"})
     except Exception as e:
-        return jsonify({
-            "status": "failed",
-            "error": str(e),
-            "traceback": traceback.format_exc().split('\n')
-        })
+        return create_response(
+            error=str(e),
+            status_code=500,
+            data={"traceback": traceback.format_exc().split('\n')}
+        )
 
 @app.route('/api/ai-prediction-simple', methods=['POST'])
+@limiter.limit("15 per minute")
 def ai_prediction_simple():
-    data = request.get_json()
     try:
+        data = request.get_json()
+        
         if AI_AVAILABLE:
             racers = data.get('racers', [])
             venue_code = data.get('venue_code', '01')
             
             # AIクラスに処理を委譲
             result = ai_model.get_comprehensive_prediction(racers, venue_code)
-            return jsonify(result)
+            return create_response(data=result)
         else:
-            return jsonify({"error": "AI not available"})
+            return create_response(error="AI not available", status_code=503)
             
     except Exception as e:
-        print(f"AI予想エラー: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"AI予想エラー: {str(e)}")
+        return create_response(error=str(e), status_code=500)
 
 @app.route('/api/train-daily', methods=['GET', 'POST'])
+@limiter.limit("2 per hour")
 def train_daily():
     try:
         if AI_AVAILABLE:
             # 過去3日分のデータで学習
             ai_model.train_prediction_model(epochs=5)
-            return jsonify({"status": "success", "message": "Daily training completed"})
+            return create_response(message="Daily training completed successfully")
         else:
-            return jsonify({"error": "AI not available"}), 503
+            return create_response(error="AI not available", status_code=503)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# バックグラウンドでデータ収集開始
-import threading
+        logger.error(f"日次学習エラー: {str(e)}")
+        return create_response(error=str(e), status_code=500)
 
 # ===== スケジューラー自動起動の修正 =====
 
@@ -1200,15 +1513,29 @@ import threading
 def initialize_app():
     """アプリケーション初期化"""
     try:
+        logger.info("=== アプリケーション初期化開始 ===")
+        
+        # データベース初期化
         initialize_database()
+        logger.info("データベース初期化完了")
+        
+        # スケジューラー開始
         venue_manager.start_background_updates()
         logger.info("✅ スケジューラー開始完了")
+        
+        logger.info("=== アプリケーション初期化完了 ===")
+        
     except Exception as e:
         logger.error(f"❌ 初期化エラー: {str(e)}")
+        raise e
 
 # アプリ起動時に自動実行
-initialize_app()
+try:
+    initialize_app()
+except Exception as e:
+    logger.error(f"アプリケーション初期化失敗: {str(e)}")
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    app.run(debug=False, host='0.0.0.0', port=port)
+    logger.info(f"🚀 Flask アプリケーション開始: ポート {port}")
+    app.run(debug=app.config['DEBUG'], host='0.0.0.0', port=port)
