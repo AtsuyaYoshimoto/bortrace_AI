@@ -1029,24 +1029,19 @@
             </div>
 
             <!-- Prediction Table -->
-            <div id="prediction-container" style="display: none;">
-                <table class="prediction-table fade-in">
-                    <thead>
-                        <tr>
-                            <th>枠番</th>
-                            <th>選手名</th>
-                            <th>級別</th>
-                            <th>年齢</th>
-                            <th>体重</th>
-                            <th>地域</th>
-                            <th>支部</th>
-                            <th>登録番号</th>
-                        </tr>
-                    </thead>
-                    <tbody id="racers-tbody">
-                        <!-- 選手データが動的に挿入されます -->
-                    </tbody>
-                </table>
+                <!-- 既存のtableタグを以下に置き換え -->
+                <div class="race-entry-table">
+                    <div class="table-header">
+                        <div class="header-cell boat-num">枠</div>
+                        <div class="header-cell racer-info">選手情報</div>
+                        <div class="header-cell stats">成績</div>
+                        <div class="header-cell motor-info">機力</div>
+                        <div class="header-cell conditions">調子</div>
+                    </div>
+                    <div class="table-body" id="racers-tbody-new">
+                        <!-- 選手データが動的に挿入される -->
+                    </div>
+                </div>
 
                 <div class="update-controls">
                     <button class="btn btn-primary" onclick="loadTodayRaces()">
