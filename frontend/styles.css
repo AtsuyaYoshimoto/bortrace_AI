@@ -1740,3 +1740,250 @@ footer {
     0%, 100% { box-shadow: 0 4px 12px rgba(245, 224, 80, 0.3); }
     50% { box-shadow: 0 4px 12px rgba(245, 224, 80, 0.6); }
 }
+
+/* ===== 競艇サイト風出走表 ===== */
+.race-entry-table {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    margin-top: 2rem;
+}
+
+.table-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    display: grid;
+    grid-template-columns: 80px 1fr 200px 120px 100px;
+    padding: 1rem 0;
+    font-weight: 600;
+}
+
+.header-cell {
+    padding: 0 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.racer-row {
+    display: grid;
+    grid-template-columns: 80px 1fr 200px 120px 100px;
+    border-bottom: 1px solid #e9ecef;
+    padding: 1.5rem 0;
+    transition: background-color 0.3s;
+}
+
+.racer-row:hover {
+    background-color: rgba(0, 102, 204, 0.05);
+}
+
+.boat-number-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.boat-number-badge {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: white;
+}
+
+.boat-1 { background: #ffffff; color: #333; border: 3px solid #333; }
+.boat-2 { background: #000000; }
+.boat-3 { background: #ff0000; }
+.boat-4 { background: #0066ff; }
+.boat-5 { background: #ffff00; color: #333; }
+.boat-6 { background: #00ff00; color: #333; }
+
+.racer-info-cell {
+    padding: 0 1rem;
+}
+
+.racer-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--dark);
+    margin-bottom: 0.3rem;
+}
+
+.racer-details {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.grade-badge {
+    padding: 0.2rem 0.6rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.stats-cell {
+    padding: 0 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+}
+
+.stat-label {
+    color: #666;
+}
+
+.stat-value {
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.motor-info-cell {
+    padding: 0 1rem;
+    text-align: center;
+}
+
+.motor-number {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 0.3rem;
+}
+
+.motor-rate {
+    font-size: 0.8rem;
+    color: #666;
+}
+
+.conditions-cell {
+    padding: 0 1rem;
+    text-align: center;
+}
+
+/* レース情報ヘッダー改善 */
+.race-header-new {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    padding: 1.5rem;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 2rem;
+}
+
+.race-title-section h3 {
+    font-size: 1.5rem;
+    margin: 0 0 0.5rem 0;
+}
+
+.race-grade {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.race-time-section {
+    text-align: center;
+}
+
+.scheduled-time {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.race-status-badge {
+    padding: 0.3rem 1rem;
+    border-radius: 15px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.race-status-badge.live {
+    background: #ff4757;
+    animation: pulse-live 2s infinite;
+}
+
+.race-status-badge.upcoming {
+    background: rgba(255,255,255,0.2);
+}
+
+.race-conditions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1.5rem;
+}
+
+.weather-info, .wind-info, .water-temp {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+}
+
+/* 展示タイム表示 */
+.exhibition-times {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem 0;
+}
+
+.exhibition-header {
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.exhibition-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1rem;
+}
+
+.exhibition-item {
+    text-align: center;
+    background: white;
+    padding: 0.8rem;
+    border-radius: 6px;
+    border-left: 4px solid;
+}
+
+.exhibition-item.boat-1 { border-left-color: #333; }
+.exhibition-item.boat-2 { border-left-color: #000; }
+.exhibition-item.boat-3 { border-left-color: #ff0000; }
+.exhibition-item.boat-4 { border-left-color: #0066ff; }
+.exhibition-item.boat-5 { border-left-color: #ffff00; }
+.exhibition-item.boat-6 { border-left-color: #00ff00; }
+
+.exhibition-boat {
+    font-size: 0.8rem;
+    color: #666;
+    margin-bottom: 0.3rem;
+}
+
+.exhibition-time {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.exhibition-rank {
+    font-size: 0.8rem;
+    color: #999;
+    margin-top: 0.2rem;
+}
