@@ -1005,10 +1005,32 @@
                     </div>
                 </div>
                 
-                <div class="race-header">
-                    <h3 id="race-title">桐生競艇 第1レース</h3>
-                    <span id="race-date">2025年05月26日</span>
+                <!-- 改善版レースヘッダー -->
+                <div class="race-header-new">
+                    <div class="race-title-section">
+                        <h3 id="race-title">第1レース</h3>
+                        <div class="race-grade">一般戦</div>
+                    </div>
+                    <div class="race-time-section">
+                        <div class="scheduled-time">14:30</div>
+                        <div class="race-status-badge live">発走前</div>
+                    </div>
+                    <div class="race-conditions">
+                        <div class="weather-info">
+                            <i class="fas fa-sun"></i>
+                            <span>晴れ</span>
+                        </div>
+                        <div class="wind-info">
+                            <i class="fas fa-wind"></i>
+                            <span>2m</span>
+                        </div>
+                        <div class="water-temp">
+                            <i class="fas fa-thermometer-half"></i>
+                            <span>23℃</span>
+                        </div>
+                    </div>
                 </div>
+                
                 <div class="race-details">
                     <div class="detail-box">
                         <i class="fas fa-map-marker-alt"></i> <span id="venue-name">桐生競艇場</span>
@@ -1028,8 +1050,8 @@
                 </div>
             </div>
 
-            <!-- Prediction Table -->
-                <!-- 既存のtableタグを以下に置き換え -->
+            <!-- 改善版出走表 -->
+            <div id="prediction-container" style="display: none;">
                 <div class="race-entry-table">
                     <div class="table-header">
                         <div class="header-cell boat-num">枠</div>
@@ -1040,6 +1062,17 @@
                     </div>
                     <div class="table-body" id="racers-tbody-new">
                         <!-- 選手データが動的に挿入される -->
+                    </div>
+                </div>
+
+                <!-- 展示タイム表示 -->
+                <div class="exhibition-times">
+                    <div class="exhibition-header">
+                        <i class="fas fa-stopwatch"></i>
+                        展示タイム
+                    </div>
+                    <div class="exhibition-grid" id="exhibition-grid">
+                        <!-- 展示タイムが動的に挿入される -->
                     </div>
                 </div>
 
