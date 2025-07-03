@@ -24,6 +24,7 @@ import json
 import pickle
 from collections import defaultdict
 import numpy as np
+pip install APScheduler
 
 # Redis import (optional)
 try:
@@ -840,6 +841,10 @@ class VenueDataManager:
         
         self.scheduler.start()
         logger.info("スケジューラー開始: 0時日次更新、1時間ごと直前情報更新、30分ごと結果収集")
+
+    except Exception as e:
+        logger.error(f"スケジューラー開始エラー: {e}")
+        self.scheduler = None
     
     def update_daily_races(self):
         """0時実行：本日の全レースデータ更新"""
