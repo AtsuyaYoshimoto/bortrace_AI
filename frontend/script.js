@@ -1,24 +1,24 @@
 /**
- * WAVE PREDICTOR - 完全版JavaScript
+ * WAVE PREDICTOR - 適正スクレイピング対応版JavaScript
  * 競艇予想サイトのメインスクリプト
  * 
- * 機能:
- * - リアルタイムデータ取得・表示
- * - AI予想機能
- * - レスポンシブUI制御
- * - アニメーション・視覚効果
- * - エラーハンドリング
+ * 改善点:
+ * - 自動更新停止（5分間隔 → 手動更新のみ）
+ * - キャッシュデータ優先表示
+ * - 適正API呼び出し頻度
+ * - 正式スクレイピングデータ対応
  */
 
 // ===== 設定・定数 =====
 const CONFIG = {
     API_BASE_URL: 'https://bortrace-ai-api-36737145161.asia-northeast1.run.app/api',
-    UPDATE_INTERVAL: 5 * 60 * 1000, // 5分
-    AUTO_REFRESH_ENABLED: true,
+    AUTO_REFRESH_ENABLED: false, // 🔴 自動更新停止
+    MANUAL_REFRESH_ONLY: true,   // ✅ 手動更新のみ
     DEBUG_MODE: false,
     ANIMATION_DURATION: 300,
     RETRY_ATTEMPTS: 3,
-    RETRY_DELAY: 2000
+    RETRY_DELAY: 2000,
+    CACHE_PREFERENCE: true       // ✅ キャッシュ優先
 };
 
 // ===== グローバル変数 =====
@@ -29,14 +29,17 @@ let retryCount = 0;
 let isLoading = false;
 let touchStartY = 0;
 let lastUpdateTime = null;
+let scrapingStatus = null;
 
-// ===== API連携クラス =====
-class BoatraceAPI {
+// ===== API連携クラス（適正化版） =====
+class OptimizedBoatraceAPI {
     constructor(baseUrl = CONFIG.API_BASE_URL) {
         this.baseUrl = baseUrl;
         this.cache = new Map();
         this.requestQueue = [];
         this.isOnline = navigator.onLine;
+        this.lastRequestTime = 0;
+        this.requestInterval = 1000; // 1秒間隔制限
         
         // オンライン状態監視
         window.addEventListener('online', () => {
@@ -52,16 +55,29 @@ class BoatraceAPI {
     async request(endpoint, options = {}) {
         const url = `${this.baseUrl}${endpoint}`;
         
+        // リクエスト間隔制限
+        const now = Date.now();
+        const timeSinceLastRequest = now - this.lastRequestTime;
+        if (timeSinceLastRequest < this.requestInterval) {
+            await new Promise(resolve => 
+                setTimeout(resolve, this.requestInterval - timeSinceLastRequest)
+            );
+        }
+        this.lastRequestTime = Date.now();
+        
         if (!this.isOnline) {
             throw new Error('オフライン状態です');
         }
 
         try {
+            console.log(`📡 API Request: ${endpoint} (優先度: キャッシュ)`);
+            
             const response = await fetch(url, {
                 timeout: 30000,
                 ...options,
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-Cache-Preference': 'cache-first', // キャッシュ優先指示
                     ...options.headers
                 }
             });
@@ -72,19 +88,31 @@ class BoatraceAPI {
 
             const data = await response.json();
             
+            // レスポンスにスクレイピング状況を保存
+            if (data.scraping_status) {
+                scrapingStatus = data.scraping_status;
+                this.updateScrapingStatusDisplay();
+            }
+            
             // キャッシュに保存（GETリクエストのみ）
             if (!options.method || options.method === 'GET') {
                 this.cache.set(url, { data, timestamp: Date.now() });
             }
             
+            console.log(`✅ API Response: ${endpoint}`, {
+                dataSource: data.data?.data_source || 'unknown',
+                scrapingCount: data.scraping_status?.count_today || 0,
+                cacheMode: data.scraping_status?.cache_only_mode || false
+            });
+            
             return data;
         } catch (error) {
-            console.error(`API Request Error (${endpoint}):`, error);
+            console.error(`❌ API Request Error (${endpoint}):`, error);
             
             // キャッシュから取得を試行
             const cached = this.cache.get(url);
-            if (cached && Date.now() - cached.timestamp < 300000) { // 5分以内
-                console.warn('キャッシュからデータを返却');
+            if (cached && Date.now() - cached.timestamp < 3600000) { // 1時間以内
+                console.warn('🗄️ キャッシュからデータを返却');
                 return cached.data;
             }
             
@@ -92,30 +120,52 @@ class BoatraceAPI {
         }
     }
 
-    async getVenues() {
-        return this.request('/venues');
+    updateScrapingStatusDisplay() {
+        if (!scrapingStatus) return;
+        
+        const statusElement = document.getElementById('scraping-status');
+        if (statusElement) {
+            const { count_today, limit, cache_only_mode, remaining } = scrapingStatus;
+            
+            let statusClass = 'status-success';
+            let statusText = `✅ 正常稼働中`;
+            
+            if (cache_only_mode) {
+                statusClass = 'status-warning';
+                statusText = `⚠️ キャッシュオンリーモード`;
+            } else if (count_today >= limit * 0.8) {
+                statusClass = 'status-warning';
+                statusText = `⚠️ スクレイピング制限接近 (${count_today}/${limit})`;
+            }
+            
+            statusElement.className = `status-indicator ${statusClass}`;
+            statusElement.innerHTML = `
+                <i class="fas fa-info-circle"></i>
+                ${statusText} - 残り${remaining}回
+            `;
+        }
     }
 
-    async getTodayRaces() {
-        return this.request('/races/today');
+    async getDailySchedule(date = null) {
+        const params = date ? `?date=${date}` : '';
+        return this.request(`/daily-schedule${params}`);
     }
 
-    async getRacePrediction(raceId) {
-        return this.request(`/prediction/${raceId}`);
-    }
-
-    async getPerformanceStats() {
-        return this.request('/stats');
-    }
-
-    async getRaceData(venue, race, date = null) {
-        const params = new URLSearchParams({ venue, race });
-        if (date) params.append('date', date);
-        return this.request(`/race-data?${params}`);
+    async getRaceEntries(venue, race, date = null) {
+        const params = date ? `?date=${date}` : '';
+        return this.request(`/race-entries/${venue}/${race}${params}`);
     }
 
     async getSystemStatus() {
         return this.request('/system-status');
+    }
+
+    async getScrapingStatus() {
+        return this.request('/scraping-status');
+    }
+
+    async getRacePrediction(raceId) {
+        return this.request(`/prediction/${raceId}`);
     }
 
     async updateAIPrediction(racers) {
@@ -124,6 +174,9 @@ class BoatraceAPI {
             body: JSON.stringify({ racers })
         });
     }
+
+    // 🔴 自動更新機能は完全に削除
+    // startAutoRefresh() は実装しない
 
     processRequestQueue() {
         // オンライン復帰時の処理
@@ -136,13 +189,14 @@ class BoatraceAPI {
     }
 }
 
-// ===== UI管理クラス =====
-class UIManager {
+// ===== UI管理クラス（適正化版） =====
+class OptimizedUIManager {
     constructor() {
         this.elements = this.cacheElements();
         this.isMobile = this.detectMobile();
         this.setupEventListeners();
         this.initializeAnimations();
+        this.setupManualRefreshSystem(); // ✅ 手動更新システム
     }
 
     cacheElements() {
@@ -161,18 +215,9 @@ class UIManager {
             racersTbodyNew: document.getElementById('racers-tbody-new'),
             exhibitionGrid: document.getElementById('exhibition-grid'),
             lastUpdated: document.getElementById('last-updated'),
-            aiLastUpdated: document.getElementById('ai-last-updated'),
-            predictedWinner: document.getElementById('predicted-winner'),
-            predictedWinnerName: document.getElementById('predicted-winner-name'),
-            winProbability: document.getElementById('win-probability'),
-            winConfidence: document.getElementById('win-confidence'),
-            recommendedWin: document.getElementById('recommended-win'),
-            recommendedExacta: document.getElementById('recommended-exacta'),
-            recommendedTrifecta: document.getElementById('recommended-trifecta'),
-            stabilityMeter: document.getElementById('stability-meter'),
-            upsetMeter: document.getElementById('upset-meter'),
-            stabilityScore: document.getElementById('stability-score'),
-            upsetScore: document.getElementById('upset-score')
+            scrapingStatus: document.getElementById('scraping-status'),
+            manualRefreshBtn: document.getElementById('manual-refresh-btn'),
+            scrapingStatusDetails: document.getElementById('scraping-status-details')
         };
     }
 
@@ -208,6 +253,110 @@ class UIManager {
         });
     }
 
+    setupManualRefreshSystem() {
+        // 手動更新ボタンの設定
+        if (this.elements.manualRefreshBtn) {
+            this.elements.manualRefreshBtn.addEventListener('click', () => {
+                this.manualRefresh();
+            });
+        }
+
+        // スクレイピング状況表示エリアの作成
+        this.createScrapingStatusDisplay();
+        
+        // 定期的な状況チェック（5分間隔、データ取得なし）
+        setInterval(() => {
+            this.updateLastUpdateTime();
+        }, 300000); // 5分間隔
+    }
+
+    createScrapingStatusDisplay() {
+        // スクレイピング状況表示エリアを追加
+        const statusArea = document.createElement('div');
+        statusArea.id = 'scraping-status-details';
+        statusArea.className = 'scraping-status-area';
+        statusArea.innerHTML = `
+            <div class="status-header">
+                <h4><i class="fas fa-chart-line"></i> システム状況</h4>
+                <button id="refresh-status-btn" class="btn btn-sm">
+                    <i class="fas fa-sync-alt"></i> 状況更新
+                </button>
+            </div>
+            <div class="status-grid">
+                <div class="status-item">
+                    <span class="status-label">動作モード:</span>
+                    <span id="operation-mode">確認中...</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">データソース:</span>
+                    <span id="data-source">キャッシュ優先</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">最終更新:</span>
+                    <span id="last-data-update">--:--:--</span>
+                </div>
+            </div>
+        `;
+
+        // データ状況表示の後に挿入
+        const dataStatus = document.querySelector('.data-status');
+        if (dataStatus) {
+            dataStatus.parentNode.insertBefore(statusArea, dataStatus.nextSibling);
+        }
+
+        // 状況更新ボタンのイベント
+        const refreshStatusBtn = document.getElementById('refresh-status-btn');
+        if (refreshStatusBtn) {
+            refreshStatusBtn.addEventListener('click', () => {
+                this.updateSystemStatus();
+            });
+        }
+    }
+
+    async updateSystemStatus() {
+        try {
+            const statusData = await app.api.getSystemStatus();
+            
+            if (statusData && statusData.data) {
+                const { scraping_status, performance } = statusData.data;
+                
+                // 動作モード表示
+                const operationMode = document.getElementById('operation-mode');
+                if (operationMode) {
+                    if (scraping_status.cache_only_mode) {
+                        operationMode.innerHTML = '<span class="status-warning">キャッシュオンリー</span>';
+                    } else {
+                        operationMode.innerHTML = '<span class="status-success">正常動作</span>';
+                    }
+                }
+                
+                // データソース表示
+                const dataSource = document.getElementById('data-source');
+                if (dataSource) {
+                    dataSource.textContent = scraping_status.cache_only_mode ? 'キャッシュのみ' : 'キャッシュ優先';
+                }
+                
+                // 成功率表示
+                this.updatePerformanceDisplay(performance);
+            }
+        } catch (error) {
+            console.error('システム状況更新エラー:', error);
+        }
+    }
+
+    updatePerformanceDisplay(performance) {
+        const successRate = (performance.success_rate * 100).toFixed(1);
+        const avgTime = (performance.avg_response_time * 1000).toFixed(0);
+        
+        // 成功率表示
+        const performanceElement = document.getElementById('performance-display');
+        if (performanceElement) {
+            performanceElement.innerHTML = `
+                成功率: ${successRate}% | 平均応答: ${avgTime}ms
+            `;
+        }
+    }
+
     setupTouchEvents() {
         document.addEventListener('touchstart', (e) => {
             touchStartY = e.touches[0].clientY;
@@ -225,7 +374,7 @@ class UIManager {
     }
 
     initializeAnimations() {
-        // パーティクル効果初期化
+        // パーティクル効果初期化（軽量版）
         this.createParticles();
         
         // スクロールアニメーション初期化
@@ -239,14 +388,14 @@ class UIManager {
         const heroParticles = document.querySelector('.hero-particles');
         if (!heroParticles) return;
 
-        const particleCount = this.isMobile ? 15 : 30;
+        const particleCount = this.isMobile ? 10 : 20; // 軽量化
         
         for (let i = 0; i < particleCount; i++) {
             const particle = document.createElement('div');
             particle.className = 'particle';
             
             // ランダムな位置とサイズ
-            const size = Math.random() * 6 + 2;
+            const size = Math.random() * 4 + 2; // サイズ縮小
             const x = Math.random() * 100;
             const delay = Math.random() * 6;
             
@@ -309,12 +458,64 @@ class UIManager {
         // R キー: リフレッシュ
         if (e.key === 'r' && e.ctrlKey) {
             e.preventDefault();
-            this.refreshData();
+            this.manualRefresh();
         }
         
         // ESC キー: エラー閉じる
         if (e.key === 'Escape') {
             this.hideError();
+        }
+    }
+
+    // ===== 手動更新システム =====
+    async manualRefresh() {
+        if (isLoading) {
+            console.log('⏳ 既に更新処理中です');
+            return;
+        }
+
+        console.log('🔄 手動更新開始');
+        
+        try {
+            this.showLoading('手動更新中...');
+            
+            // システム状況確認
+            await this.updateSystemStatus();
+            
+            // 選択された会場・レースがある場合は再取得
+            if (selectedVenue && selectedRace) {
+                await app.loadSelectedRaceData(selectedVenue, selectedRace, 'Selected Venue');
+            } else {
+                // 会場一覧を更新
+                await app.loadVenues();
+            }
+            
+            this.hideLoading();
+            this.updateStatus('success', '<i class="fas fa-check-circle"></i> 手動更新完了');
+            this.updateTimestamp();
+            
+            console.log('✅ 手動更新完了');
+            
+        } catch (error) {
+            console.error('❌ 手動更新エラー:', error);
+            this.showError('手動更新に失敗しました', error);
+        }
+    }
+
+    updateLastUpdateTime() {
+        // 最終更新時間の表示更新（データ取得なし）
+        if (lastUpdateTime) {
+            const timeDiff = Math.floor((Date.now() - lastUpdateTime.getTime()) / 1000 / 60);
+            const lastUpdatedElement = document.getElementById('last-updated');
+            
+            if (lastUpdatedElement) {
+                if (timeDiff < 60) {
+                    lastUpdatedElement.textContent = `${timeDiff}分前`;
+                } else {
+                    const hours = Math.floor(timeDiff / 60);
+                    lastUpdatedElement.textContent = `${hours}時間前`;
+                }
+            }
         }
     }
 
@@ -386,7 +587,7 @@ class UIManager {
         });
 
         // 複数の要素を更新
-        [this.elements.lastUpdated, this.elements.aiLastUpdated].forEach(element => {
+        [this.elements.lastUpdated, document.getElementById('last-data-update')].forEach(element => {
             if (element) {
                 element.textContent = formatted;
             }
@@ -398,13 +599,13 @@ class UIManager {
     showPullToRefresh() {
         const refreshIndicator = document.createElement('div');
         refreshIndicator.className = 'pull-refresh-indicator';
-        refreshIndicator.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> 更新中...';
+        refreshIndicator.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> 手動更新中...';
         
         document.body.appendChild(refreshIndicator);
         
         setTimeout(() => {
             refreshIndicator.remove();
-            this.refreshData();
+            this.manualRefresh();
         }, 1000);
     }
 
@@ -429,47 +630,37 @@ class UIManager {
     }
 
     cleanup() {
-        if (updateTimer) {
-            clearInterval(updateTimer);
-        }
-    }
-
-    async refreshData() {
-        try {
-            await app.loadRealTimeData();
-            await app.loadAIPrediction();
-        } catch (error) {
-            console.error('Data refresh error:', error);
-        }
+        // 🔴 updateTimerは使用しないため削除
+        console.log('🧹 クリーンアップ完了（自動更新タイマーなし）');
     }
 }
 
-// ===== メインアプリケーションクラス =====
-class WavePredictorApp {
+// ===== メインアプリケーションクラス（適正化版） =====
+class OptimizedWavePredictorApp {
     constructor() {
-        this.api = new BoatraceAPI();
-        this.ui = new UIManager();
+        this.api = new OptimizedBoatraceAPI();
+        this.ui = new OptimizedUIManager();
         this.isInitialized = false;
     }
 
     async initialize() {
         try {
-            console.log('🌊 WAVE PREDICTOR 初期化開始');
+            console.log('🌊 WAVE PREDICTOR 適正版初期化開始');
             
             this.ui.showLoading('システム初期化中...');
             
-            // 初期データ読み込み
+            // 初期データ読み込み（キャッシュ優先）
             await this.loadInitialData();
             
-            // 定期更新開始
-            this.startAutoUpdate();
+            // 🔴 自動更新は開始しない（削除）
+            // this.startAutoUpdate(); ← 削除
             
             // UI初期化完了
             this.ui.hideLoading();
-            this.ui.updateStatus('success', '<i class="fas fa-check-circle"></i> システム準備完了');
+            this.ui.updateStatus('success', '<i class="fas fa-check-circle"></i> システム準備完了（手動更新モード）');
             
             this.isInitialized = true;
-            console.log('✅ WAVE PREDICTOR 初期化完了');
+            console.log('✅ WAVE PREDICTOR 適正版初期化完了');
             
         } catch (error) {
             console.error('❌ 初期化エラー:', error);
@@ -488,15 +679,12 @@ class WavePredictorApp {
 
     async loadInitialData() {
         try {
-            // システム状態確認
+            // システム状態確認（キャッシュ優先）
             const systemStatus = await this.api.getSystemStatus();
             console.log('System Status:', systemStatus);
             
-            // 会場データ読み込み
+            // 会場データ読み込み（キャッシュ優先）
             await this.loadVenues();
-            
-            // 統計データ読み込み
-            await this.updatePerformanceStats();
             
         } catch (error) {
             console.error('Initial data loading error:', error);
@@ -506,7 +694,7 @@ class WavePredictorApp {
 
     async loadVenues() {
         try {
-            console.log('=== 競艇会場データ取得開始 ===');
+            console.log('=== 競艇会場データ取得開始（キャッシュ優先） ===');
             
             if (!this.ui.elements.venueGrid) {
                 throw new Error('venue-grid要素が見つかりません');
@@ -515,40 +703,36 @@ class WavePredictorApp {
             // ローディング表示
             this.ui.elements.venueGrid.innerHTML = `
                 <div style="grid-column: 1 / -1; text-align:center; padding:40px;">
-                    <i class="fas fa-spinner fa-spin" style="font-size:2rem; color:var(--primary); margin-bottom:1rem;"></i>
-                    <div style="color:var(--primary); font-weight:600;">競艇場状況取得中...</div>
+                    <i class="fas fa-database" style="font-size:2rem; color:var(--primary); margin-bottom:1rem;"></i>
+                    <div style="color:var(--primary); font-weight:600;">競艇場データ取得中（キャッシュ優先）...</div>
                 </div>
             `;
             
-            // 会場データとステータス取得
-            const [venues, statusResponse] = await Promise.all([
-                this.api.getVenues(),
-                this.api.getSystemStatus()
-            ]);
+            // 日次スケジュール取得（キャッシュ優先）
+            const scheduleResponse = await this.api.getDailySchedule();
             
-            console.log('取得した会場データ:', venues);
-            console.log('システムステータス:', statusResponse);
+            console.log('取得したスケジュールデータ:', scheduleResponse);
             
-            this.ui.elements.venueGrid.innerHTML = '';
-            
-            // 開催中の会場を優先表示
-            const sortedVenues = Object.entries(venues).sort(([codeA], [codeB]) => {
-                const statusA = statusResponse.data_collection?.active_venues || 0;
-                const statusB = statusResponse.data_collection?.active_venues || 0;
-                return statusB - statusA;
-            });
-            
-            // 各会場カードを生成
-            sortedVenues.forEach(([code, venueData]) => {
-                const venueCard = this.createVenueCard(code, venueData, statusResponse);
-                this.ui.elements.venueGrid.appendChild(venueCard);
-            });
-            
-            // 会場表示完了
-            this.ui.elements.raceInfo.style.display = 'block';
-            this.updateVenueSummary(statusResponse);
-            
-            console.log('=== 競艇会場データ表示完了 ===');
+            if (scheduleResponse && scheduleResponse.data && scheduleResponse.data.venues) {
+                this.ui.elements.venueGrid.innerHTML = '';
+                
+                const venues = scheduleResponse.data.venues;
+                const dataSource = scheduleResponse.data.data_source || 'cache';
+                
+                // 各会場カードを生成
+                Object.values(venues).forEach(venueData => {
+                    const venueCard = this.createVenueCard(venueData, dataSource);
+                    this.ui.elements.venueGrid.appendChild(venueCard);
+                });
+                
+                // 会場表示完了
+                this.ui.elements.raceInfo.style.display = 'block';
+                this.updateVenueSummary(venues, dataSource);
+                
+                console.log('=== 競艇会場データ表示完了 ===');
+            } else {
+                throw new Error('会場データが見つかりません');
+            }
             
         } catch (error) {
             console.error('会場データ取得エラー:', error);
@@ -556,53 +740,67 @@ class WavePredictorApp {
         }
     }
 
-    createVenueCard(code, venueData, statusResponse) {
+    createVenueCard(venueData, dataSource) {
         const venueCard = document.createElement('div');
         venueCard.className = 'venue-card';
         
-        // アクティブ状態の判定
-        const isActive = statusResponse.data_collection?.active_venues > 0 && Math.random() > 0.7; // デモ用
+        const isActive = venueData.is_active && venueData.races && venueData.races.length > 0;
         
         if (isActive) {
             venueCard.classList.add('active');
             
-            const statusText = 'LIVE';
-            const raceInfo = `${Math.floor(Math.random() * 12) + 1}R進行中`;
+            const raceCount = venueData.races.length;
+            const nextRace = venueData.races.find(r => r.status === 'scheduled');
+            const statusText = nextRace ? `${nextRace.race_number}R ${nextRace.scheduled_time}` : `${raceCount}R開催`;
             
             venueCard.innerHTML = `
-                <div class="venue-status-indicator live">${statusText}</div>
-                <div class="venue-name">${venueData.name}</div>
-                <div class="venue-location">${venueData.location}</div>
-                <div class="venue-race-status active-status">${raceInfo}</div>
+                <div class="venue-status-indicator live">開催中</div>
+                <div class="venue-name">${venueData.venue_name}</div>
+                <div class="venue-location">${this.getVenueLocation(venueData.venue_code)}</div>
+                <div class="venue-race-status active-status">${statusText}</div>
+                <div class="data-source-indicator ${dataSource}">${dataSource === 'cache' ? 'キャッシュ' : '取得済'}</div>
             `;
             
-            venueCard.onclick = () => this.selectVenue(code, venueData.name);
+            venueCard.onclick = () => this.selectVenue(venueData.venue_code, venueData.venue_name, venueData.races);
             
         } else {
             venueCard.classList.add('inactive');
             
             venueCard.innerHTML = `
                 <div class="venue-status-indicator closed">休場</div>
-                <div class="venue-name">${venueData.name}</div>
-                <div class="venue-location">${venueData.location}</div>
+                <div class="venue-name">${venueData.venue_name}</div>
+                <div class="venue-location">${this.getVenueLocation(venueData.venue_code)}</div>
                 <div class="venue-race-status inactive-status">本日開催なし</div>
+                <div class="data-source-indicator cache">キャッシュ</div>
             `;
         }
         
         return venueCard;
     }
 
-    updateVenueSummary(statusResponse) {
-        const activeCount = statusResponse.data_collection?.active_venues || 0;
+    getVenueLocation(venueCode) {
+        const locations = {
+            '01': '群馬県', '02': '埼玉県', '03': '東京都', '04': '東京都', '05': '東京都',
+            '06': '静岡県', '07': '愛知県', '08': '愛知県', '09': '三重県', '10': '福井県',
+            '11': '滋賀県', '12': '大阪府', '13': '兵庫県', '14': '徳島県', '15': '香川県',
+            '16': '岡山県', '17': '広島県', '18': '山口県', '19': '山口県', '20': '福岡県',
+            '21': '福岡県', '22': '福岡県', '23': '佐賀県', '24': '長崎県'
+        };
+        return locations[venueCode] || '不明';
+    }
+
+    updateVenueSummary(venues, dataSource) {
+        const activeCount = Object.values(venues).filter(v => v.is_active).length;
         const currentHour = new Date().getHours();
+        const sourceText = dataSource === 'cache' ? 'キャッシュ' : '最新';
         
         if (activeCount > 0) {
             this.ui.updateStatus('success', 
-                `<i class="fas fa-check-circle"></i> 開催中: ${activeCount}会場 (${currentHour}時台)`
+                `<i class="fas fa-check-circle"></i> 開催中: ${activeCount}会場（${sourceText}データ）`
             );
         } else {
             this.ui.updateStatus('success', 
-                `<i class="fas fa-info-circle"></i> 開催情報取得完了 (${currentHour}時台)`
+                `<i class="fas fa-info-circle"></i> データ取得完了（${sourceText}）`
             );
         }
     }
@@ -613,15 +811,15 @@ class WavePredictorApp {
                 <div style="grid-column: 1 / -1; text-align:center; padding:40px; color:var(--danger);">
                     <i class="fas fa-exclamation-triangle" style="font-size:2rem; margin-bottom:1rem;"></i>
                     <div style="font-weight:600; margin-bottom:1rem;">データ取得エラー</div>
-                    <button class="btn btn-primary" onclick="app.loadVenues()">
-                        <i class="fas fa-sync-alt"></i> 再試行
+                    <button class="btn btn-primary" onclick="app.ui.manualRefresh()">
+                        <i class="fas fa-sync-alt"></i> 手動更新
                     </button>
                 </div>
             `;
         }
     }
 
-    selectVenue(venueCode, venueName) {
+    selectVenue(venueCode, venueName, races) {
         selectedVenue = venueCode;
         
         // 選択状態の更新
@@ -636,28 +834,23 @@ class WavePredictorApp {
         }
         
         // レース選択UIを表示
-        this.showRaceSelector(venueCode, venueName);
+        this.showRaceSelector(venueCode, venueName, races);
     }
 
-    async showRaceSelector(venueCode, venueName) {
+    showRaceSelector(venueCode, venueName, races) {
         if (!this.ui.elements.raceSelector || !this.ui.elements.raceButtons) {
             console.error('レース選択UI要素が見つかりません');
             return;
         }
         
         this.ui.elements.raceSelector.style.display = 'block';
-        this.ui.elements.raceButtons.innerHTML = '<div style="text-align:center; padding:20px;">レース情報取得中...</div>';
+        this.ui.elements.raceButtons.innerHTML = '';
         
-        try {
-            // レーススケジュール生成
-            const raceSchedule = this.generateRaceSchedule();
-            
-            this.ui.elements.raceButtons.innerHTML = '';
-            
-            raceSchedule.forEach((race) => {
+        if (races && races.length > 0) {
+            races.forEach((race) => {
                 const raceBtn = document.createElement('button');
                 raceBtn.className = 'race-btn';
-                raceBtn.classList.add(race.status);
+                raceBtn.classList.add(race.status || 'scheduled');
                 
                 let statusText = '';
                 if (race.status === 'live') statusText = '<div class="race-status">LIVE</div>';
@@ -672,48 +865,16 @@ class WavePredictorApp {
                 raceBtn.onclick = () => this.selectRace(race.race_number, venueCode, venueName);
                 this.ui.elements.raceButtons.appendChild(raceBtn);
             });
-            
-        } catch (error) {
-            console.error('レース情報取得エラー:', error);
+        } else {
             this.ui.elements.raceButtons.innerHTML = `
-                <div style="text-align:center; color:var(--danger); padding:20px;">
-                    レース情報取得エラー<br>
-                    <button class="btn btn-sm" onclick="app.showRaceSelector('${venueCode}', '${venueName}')">
-                        再試行
+                <div style="text-align:center; color:var(--warning); padding:20px;">
+                    レース情報が利用できません<br>
+                    <button class="btn btn-sm" onclick="app.ui.manualRefresh()">
+                        手動更新
                     </button>
                 </div>
             `;
         }
-    }
-
-    generateRaceSchedule() {
-        const races = [];
-        const currentHour = new Date().getHours();
-        const currentMinute = new Date().getMinutes();
-        const currentTimeMinutes = currentHour * 60 + currentMinute;
-        
-        for (let i = 1; i <= 12; i++) {
-            const raceStartMinutes = 15 * 60 + (i - 1) * 30; // 15:00開始、30分間隔
-            const raceEndMinutes = raceStartMinutes + 25;
-            
-            const hour = Math.floor(raceStartMinutes / 60);
-            const minute = raceStartMinutes % 60;
-            
-            let status = 'upcoming';
-            if (currentTimeMinutes > raceEndMinutes) {
-                status = 'completed';
-            } else if (currentTimeMinutes >= raceStartMinutes && currentTimeMinutes <= raceEndMinutes) {
-                status = 'live';
-            }
-            
-            races.push({
-                race_number: i,
-                scheduled_time: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`,
-                status: status
-            });
-        }
-        
-        return races;
     }
 
     selectRace(raceNumber, venueCode, venueName) {
@@ -736,18 +897,20 @@ class WavePredictorApp {
 
     async loadSelectedRaceData(venueCode, raceNumber, venueName) {
         try {
-            this.ui.showLoading(`${venueName} 第${raceNumber}レース データ取得中...`);
+            this.ui.showLoading(`${venueName} 第${raceNumber}レース 出走表取得中（キャッシュ優先）...`);
             
-            const data = await this.api.getRaceData(venueCode, raceNumber);
+            const data = await this.api.getRaceEntries(venueCode, raceNumber);
             
-            if (data.racer_extraction && data.racer_extraction.racers) {
-                this.displayRealRacers(data.racer_extraction.racers);
-                this.updateRaceInfoFromSelected(data, venueName, raceNumber);
+            if (data && data.data && data.data.racer_extraction && data.data.racer_extraction.racers) {
+                this.displayRealRacers(data.data.racer_extraction.racers, data.data.data_source);
+                this.updateRaceInfoFromSelected(data.data, venueName, raceNumber);
                 
                 // 表示切り替え
                 this.ui.elements.predictionContainer.style.display = 'block';
                 this.ui.hideLoading();
-                this.ui.updateStatus('success', '<i class="fas fa-check-circle"></i> 出走表取得完了');
+                
+                const sourceText = data.data.data_source === 'cache' ? 'キャッシュ' : '最新';
+                this.ui.updateStatus('success', `<i class="fas fa-check-circle"></i> 出走表取得完了（${sourceText}）`);
             } else {
                 throw new Error('選手データが見つかりません');
             }
@@ -769,7 +932,7 @@ class WavePredictorApp {
         this.ui.updateTimestamp(data.timestamp);
     }
 
-    displayRealRacers(racers) {
+    displayRealRacers(racers, dataSource) {
         if (!this.ui.elements.racersTbodyNew) {
             console.error('racers-tbody-new要素が見つかりません');
             return;
@@ -782,12 +945,10 @@ class WavePredictorApp {
             row.className = 'racer-row fade-in';
             row.style.animationDelay = `${index * 0.1}s`;
             
-            // モック成績データ
-            const mockStats = {
-                win_rate: (Math.random() * 8 + 2).toFixed(2),
-                place_rate: (Math.random() * 30 + 40).toFixed(1),
-                trio_rate: (Math.random() * 20 + 60).toFixed(1)
-            };
+            // データソース表示
+            const sourceIndicator = dataSource === 'cache' ? 
+                '<span class="data-source-badge cache">キャッシュ</span>' : 
+                '<span class="data-source-badge live">最新</span>';
             
             row.innerHTML = `
                 <div class="boat-number-cell">
@@ -796,7 +957,7 @@ class WavePredictorApp {
                     </div>
                 </div>
                 <div class="racer-info-cell">
-                    <div class="racer-name">${racer.name}</div>
+                    <div class="racer-name">${racer.name} ${sourceIndicator}</div>
                     <div class="racer-details">
                         <span class="grade-badge ${racer.class?.toLowerCase()}">${racer.class}</span>
                         <span>${racer.age}歳</span>
@@ -806,16 +967,8 @@ class WavePredictorApp {
                 </div>
                 <div class="stats-cell">
                     <div class="stat-row">
-                        <span class="stat-label">勝率</span>
-                        <span class="stat-value">${mockStats.win_rate}</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">2連率</span>
-                        <span class="stat-value">${mockStats.place_rate}%</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">3連率</span>
-                        <span class="stat-value">${mockStats.trio_rate}%</span>
+                        <span class="stat-label">登録</span>
+                        <span class="stat-value">${racer.registration_number}</span>
                     </div>
                 </div>
                 <div class="motor-info-cell">
@@ -867,47 +1020,8 @@ class WavePredictorApp {
         });
     }
 
-    async loadRealTimeData() {
-        try {
-            this.ui.showLoading('リアルタイムデータ取得中...');
-            
-            const response = await this.api.request('/real-data-test');
-            
-            if (response.error) {
-                throw new Error(response.error);
-            }
-
-            // 成功時の処理
-            this.ui.hideLoading();
-            this.ui.elements.raceInfo.style.display = 'block';
-            this.ui.elements.predictionContainer.style.display = 'block';
-            this.ui.updateStatus('success', '<i class="fas fa-check-circle"></i> データ取得成功');
-
-            // リアルデータを表示
-            if (response.racer_extraction && response.racer_extraction.racers) {
-                this.displayRealRacers(response.racer_extraction.racers);
-                this.updateRaceInfoFromReal(response);
-            }
-
-            // タイムスタンプ更新
-            this.ui.updateTimestamp(response.timestamp);
-
-        } catch (error) {
-            console.error('データ取得エラー:', error);
-            this.ui.showError('データの取得に失敗しました', error);
-        }
-    }
-
-    updateRaceInfoFromReal(data) {
-        // レースヘッダーの更新
-        const raceHeader = document.querySelector('.race-header h3');
-        if (raceHeader) {
-            raceHeader.textContent = `桐生競艇 第1レース`;
-        }
-        
-        // タイムスタンプ更新
-        this.ui.updateTimestamp(data.timestamp);
-    }
+    // ===== 🔴 自動更新機能は完全削除 =====
+    // startAutoUpdate() メソッドは実装しない
 
     async loadAIPrediction() {
         try {
@@ -939,193 +1053,56 @@ class WavePredictorApp {
     displayAIPredictionResult(prediction) {
         const topPrediction = prediction.ai_predictions.predictions[0];
         
-        // 勝率予測表示
-        if (this.ui.elements.predictedWinner) {
-            this.ui.elements.predictedWinner.textContent = topPrediction.boat_number;
+        // AI予想表示ロジック（既存と同じ）
+        if (document.getElementById('predicted-winner')) {
+            document.getElementById('predicted-winner').textContent = topPrediction.boat_number;
         }
         
-        if (this.ui.elements.predictedWinnerName) {
-            this.ui.elements.predictedWinnerName.textContent = `選手${topPrediction.boat_number}`;
+        if (document.getElementById('predicted-winner-name')) {
+            document.getElementById('predicted-winner-name').textContent = `選手${topPrediction.boat_number}`;
         }
         
-        if (this.ui.elements.winProbability) {
+        if (document.getElementById('win-probability')) {
             const winProb = Math.round(topPrediction.normalized_probability * 100);
-            this.ui.elements.winProbability.textContent = `${winProb}%`;
+            document.getElementById('win-probability').textContent = `${winProb}%`;
         }
         
-        if (this.ui.elements.winConfidence) {
-            this.ui.elements.winConfidence.textContent = '85';
-        }
-        
-        // 推奨舟券表示
-        if (prediction.ai_predictions.recommendations) {
-            const recs = prediction.ai_predictions.recommendations;
-            
-            if (this.ui.elements.recommendedWin && recs.win) {
-                this.ui.elements.recommendedWin.textContent = recs.win.boat_number;
-            }
-            
-            if (this.ui.elements.recommendedExacta && recs.exacta) {
-                this.ui.elements.recommendedExacta.textContent = recs.exacta.combination.join('-');
-            }
-            
-            if (this.ui.elements.recommendedTrifecta && recs.trio_patterns) {
-                const patterns = recs.trio_patterns.map(p => p.combination.join('-')).join(' / ');
-                this.ui.elements.recommendedTrifecta.textContent = patterns;
-            }
-        }
-        
-        // メーター表示アニメーション
         this.animateMeters();
     }
 
     displayMockAIPrediction() {
-        // モックデータでAI予想を表示
-        if (this.ui.elements.predictedWinner) {
-            this.ui.elements.predictedWinner.textContent = '1';
+        // モックAI予想表示（既存と同じ）
+        if (document.getElementById('predicted-winner')) {
+            document.getElementById('predicted-winner').textContent = '1';
         }
         
-        if (this.ui.elements.predictedWinnerName) {
-            this.ui.elements.predictedWinnerName.textContent = '山田太郎';
+        if (document.getElementById('predicted-winner-name')) {
+            document.getElementById('predicted-winner-name').textContent = '山田太郎';
         }
         
-        if (this.ui.elements.winProbability) {
-            this.ui.elements.winProbability.textContent = '78%';
-        }
-        
-        if (this.ui.elements.winConfidence) {
-            this.ui.elements.winConfidence.textContent = '92';
-        }
-        
-        if (this.ui.elements.recommendedWin) {
-            this.ui.elements.recommendedWin.textContent = '1';
-        }
-        
-        if (this.ui.elements.recommendedExacta) {
-            this.ui.elements.recommendedExacta.textContent = '1-3';
-        }
-        
-        if (this.ui.elements.recommendedTrifecta) {
-            this.ui.elements.recommendedTrifecta.textContent = '1-3-2';
+        if (document.getElementById('win-probability')) {
+            document.getElementById('win-probability').textContent = '78%';
         }
         
         this.animateMeters();
     }
 
     animateMeters() {
-        // 安定性メーター
-        if (this.ui.elements.stabilityMeter) {
+        // メーターアニメーション（既存と同じ）
+        const stabilityMeter = document.getElementById('stability-meter');
+        const upsetMeter = document.getElementById('upset-meter');
+        
+        if (stabilityMeter) {
             setTimeout(() => {
-                this.ui.elements.stabilityMeter.style.width = '78%';
+                stabilityMeter.style.width = '78%';
             }, 500);
         }
         
-        if (this.ui.elements.stabilityScore) {
-            this.ui.elements.stabilityScore.textContent = '78%';
-        }
-        
-        // 波乱度メーター
-        if (this.ui.elements.upsetMeter) {
+        if (upsetMeter) {
             setTimeout(() => {
-                this.ui.elements.upsetMeter.style.width = '35%';
+                upsetMeter.style.width = '35%';
             }, 700);
         }
-        
-        if (this.ui.elements.upsetScore) {
-            this.ui.elements.upsetScore.textContent = '35%';
-        }
-    }
-
-    async updateAIPrediction() {
-        try {
-            console.log('AI予想更新開始...');
-            
-            const currentRacers = this.getCurrentRacersData();
-            
-            if (!currentRacers || currentRacers.length === 0) {
-                this.ui.showError('選手データが読み込まれていません');
-                return;
-            }
-            
-            this.ui.showLoading('AI分析中...');
-            
-            const aiResult = await this.api.updateAIPrediction(currentRacers);
-            
-            this.displayAIPredictionResult(aiResult);
-            this.ui.hideLoading();
-            this.ui.updateStatus('success', '<i class="fas fa-robot"></i> AI予想更新完了');
-            
-        } catch (error) {
-            console.error('AI予想エラー:', error);
-            this.ui.showError(`AI予想の更新に失敗しました: ${error.message}`);
-        }
-    }
-
-    getCurrentRacersData() {
-        const racerRows = document.querySelectorAll('.racer-row');
-        const racers = [];
-        
-        racerRows.forEach((row) => {
-            const boatNumberElement = row.querySelector('.boat-number-badge');
-            const nameElement = row.querySelector('.racer-name');
-            const gradeElement = row.querySelector('.grade-badge');
-            
-            if (boatNumberElement && nameElement && gradeElement) {
-                const racer = {
-                    boat_number: parseInt(boatNumberElement.textContent.trim()),
-                    name: nameElement.textContent.trim(),
-                    class: gradeElement.textContent.trim()
-                };
-                racers.push(racer);
-            }
-        });
-        
-        return racers;
-    }
-
-    async updatePerformanceStats() {
-        try {
-            const stats = await this.api.getPerformanceStats();
-            
-            const mockStats = {
-                win_rate: 0.945,
-                exacta_rate: 0.823,
-                trifecta_rate: 0.678,
-                avg_payout: 28500
-            };
-            
-            // 統計カードの更新
-            const statNumbers = document.querySelectorAll('.stat-number');
-            if (statNumbers.length >= 4) {
-                statNumbers[0].textContent = `${(mockStats.win_rate * 100).toFixed(1)}%`;
-                statNumbers[1].textContent = `${(mockStats.exacta_rate * 100).toFixed(1)}%`;
-                statNumbers[2].textContent = `${(mockStats.trifecta_rate * 100).toFixed(1)}%`;
-                statNumbers[3].textContent = `¥${mockStats.avg_payout.toLocaleString()}`;
-            }
-            
-        } catch (error) {
-            console.error('統計情報取得エラー:', error);
-        }
-    }
-
-    startAutoUpdate() {
-        if (!CONFIG.AUTO_REFRESH_ENABLED) return;
-        
-        updateTimer = setInterval(async () => {
-            if (!isLoading && this.isInitialized) {
-                console.log('🔄 自動更新実行');
-                try {
-                    await this.loadVenues();
-                    if (selectedVenue && selectedRace) {
-                        await this.loadSelectedRaceData(selectedVenue, selectedRace, 'Selected Venue');
-                    }
-                } catch (error) {
-                    console.error('Auto update error:', error);
-                }
-            }
-        }, CONFIG.UPDATE_INTERVAL);
-        
-        console.log(`⏰ 自動更新開始: ${CONFIG.UPDATE_INTERVAL / 1000}秒間隔`);
     }
 }
 
@@ -1207,26 +1184,46 @@ function setupEventListeners() {
     }
 }
 
-// ===== アプリケーション初期化 =====
+// ===== アプリケーション初期化（適正版） =====
 let app;
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🌊 WAVE PREDICTOR 開始');
+    console.log('🌊 WAVE PREDICTOR 適正版開始');
     
     // グローバルアプリインスタンス作成
-    app = new WavePredictorApp();
+    app = new OptimizedWavePredictorApp();
     
     // イベントリスナー設定
     setupEventListeners();
     
     // アプリケーション初期化
     app.initialize();
+    
+    // 初期化完了メッセージ
+    console.log(`
+    ✅ WAVE PREDICTOR 適正版初期化完了
+    🔴 自動更新: 無効
+    ✅ 手動更新: 有効
+    🗄️ データソース: キャッシュ優先
+    🔄 更新方式: 手動更新のみ
+    📊 スクレイピング: 適正頻度
+    `);
 });
 
-// ===== グローバル関数（HTMLから呼び出し用） =====
-window.loadRealTimeData = () => app.loadRealTimeData();
+// ===== グローバル関数（HTMLから呼び出し用・適正化） =====
+window.loadRealTimeData = () => {
+    console.log('⚠️ リアルタイムデータ取得は停止されました。手動更新を使用してください。');
+    app.ui.manualRefresh();
+};
+
 window.loadAIPrediction = () => app.loadAIPrediction();
-window.updateAIPrediction = () => app.updateAIPrediction();
+
+window.updateAIPrediction = () => {
+    // AI予想更新（手動）
+    console.log('🤖 AI予想手動更新');
+    app.loadAIPrediction();
+};
+
 window.initApp = () => app.initialize();
 
 // ===== エラーハンドリング =====
@@ -1244,4 +1241,16 @@ window.addEventListener('unhandledrejection', (event) => {
     }
 });
 
-console.log('🚀 WAVE PREDICTOR Script Loaded');
+console.log(`
+🚀 WAVE PREDICTOR 適正スクレイピング版 Script Loaded
+
+📋 主な変更点:
+🔴 5分間隔自動更新 → 停止
+✅ 手動更新システム → 有効
+🗄️ キャッシュ優先モード → 有効
+📊 適正API呼び出し → 1秒間隔制限
+⚡ リアルタイムスクレイピング → 停止
+🔄 更新方式 → 手動更新のみ
+
+使用方法: 「データ更新」ボタンで手動更新してください
+`);
