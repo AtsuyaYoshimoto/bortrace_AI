@@ -3,1414 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>WAVE PREDICTOR | 最先端AI競艇予想サイト</title>
+    <title>WAVE PREDICTOR | 適正スクレイピング対応版</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <meta name="description" content="最先端AIが導く競艇予想サイト。ディープラーニングによる高精度予測で勝利をサポート。">
-    <meta name="keywords" content="競艇,予想,AI,ディープラーニング,ボートレース,舟券">
+    <meta name="description" content="適正スクレイピング対応版。手動更新・キャッシュ優先で安全運用。">
+    <meta name="keywords" content="競艇,予想,AI,適正スクレイピング,手動更新">
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="manifest" href="/site.webmanifest">
-    <style>
-        :root {
-            --primary: #0066cc;
-            --primary-dark: #004c99;
-            --primary-light: #4d94ff;
-            --secondary: #00ccff;
-            --accent: #ff6600;
-            --dark: #1a1a2e;
-            --light: #f5f7fa;
-            --success: #28a745;
-            --warning: #ffc107;
-            --danger: #dc3545;
-            --gradient-primary: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            --gradient-accent: linear-gradient(135deg, var(--accent) 0%, #ff8533 100%);
-            --shadow-sm: 0 2px 4px rgba(0,0,0,0.05);
-            --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
-            --shadow-lg: 0 8px 24px rgba(0,0,0,0.15);
-            --shadow-xl: 0 12px 30px rgba(0,0,0,0.2);
-            --border-radius: 8px;
-            --border-radius-lg: 12px;
-            --transition: all 0.3s ease;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Noto Sans JP', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--light);
-            color: #333;
-            line-height: 1.6;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 20px;
-        }
-
-        /* ヘッダー改善版 */
-        header {
-            background: var(--gradient-primary);
-            color: white;
-            padding: 1rem 0;
-            box-shadow: var(--shadow-lg);
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-            backdrop-filter: blur(10px);
-        }
-
-        .header-inner {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            font-size: 1.8rem;
-            font-weight: 800;
-            text-decoration: none;
-            color: white;
-            transition: var(--transition);
-        }
-
-        .logo:hover {
-            transform: scale(1.05);
-        }
-
-        .logo i {
-            margin-right: 10px;
-            font-size: 2rem;
-            animation: wave 2s ease-in-out infinite;
-        }
-
-        @keyframes wave {
-            0%, 100% { transform: rotate(0deg); }
-            25% { transform: rotate(-10deg); }
-            75% { transform: rotate(10deg); }
-        }
-
-        nav ul {
-            display: flex;
-            list-style: none;
-            gap: 0.5rem;
-        }
-
-        nav a {
-            color: white;
-            text-decoration: none;
-            font-weight: 600;
-            padding: 0.8rem 1.2rem;
-            border-radius: var(--border-radius);
-            transition: var(--transition);
-            position: relative;
-            overflow: hidden;
-        }
-
-        nav a:hover {
-            background-color: rgba(255, 255, 255, 0.15);
-            transform: translateY(-2px);
-        }
-
-        nav a::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-            transition: left 0.5s;
-        }
-
-        nav a:hover::before {
-            left: 100%;
-        }
-
-        /* ハンバーガーメニュー */
-        .mobile-menu-toggle {
-            display: none;
-            background: none;
-            border: none;
-            color: white;
-            font-size: 1.5rem;
-            cursor: pointer;
-            padding: 0.5rem;
-        }
-
-        /* ヒーローセクション改善版 */
-        .hero {
-            position: relative;
-            height: 60vh;
-            min-height: 500px;
-            background: linear-gradient(135deg, rgba(0, 102, 204, 0.9) 0%, rgba(0, 204, 255, 0.8) 100%),
-                        url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400"><defs><linearGradient id="wave" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" style="stop-color:%230066cc;stop-opacity:0.1" /><stop offset="100%" style="stop-color:%2300ccff;stop-opacity:0.1" /></linearGradient></defs><path d="M0,120 C300,180 600,60 900,120 C1050,150 1200,90 1200,90 L1200,400 L0,400 Z" fill="url(%23wave)"/></svg>') center/cover;
-            display: flex;
-            align-items: center;
-            text-align: left;
-            color: white;
-            overflow: hidden;
-        }
-
-        .hero-particles {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-        }
-
-        .particle {
-            position: absolute;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 50%;
-            animation: float 6s ease-in-out infinite;
-        }
-
-        @keyframes float {
-            0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0; }
-            50% { transform: translateY(-100px) rotate(180deg); opacity: 1; }
-        }
-
-        .hero-content {
-            position: relative;
-            z-index: 2;
-            max-width: 700px;
-            margin-left: 5%;
-            animation: slideInLeft 1s ease-out;
-        }
-
-        @keyframes slideInLeft {
-            from { opacity: 0; transform: translateX(-50px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-
-        .hero h1 {
-            font-size: clamp(2rem, 5vw, 3.5rem);
-            margin-bottom: 1.5rem;
-            font-weight: 800;
-            line-height: 1.2;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-
-        .hero p {
-            font-size: clamp(1rem, 3vw, 1.3rem);
-            margin-bottom: 2.5rem;
-            opacity: 0.95;
-            line-height: 1.6;
-        }
-
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 1rem 2rem;
-            background: var(--gradient-accent);
-            color: white;
-            text-decoration: none;
-            border-radius: var(--border-radius-lg);
-            font-weight: 600;
-            font-size: 1.1rem;
-            transition: var(--transition);
-            border: none;
-            cursor: pointer;
-            position: relative;
-            overflow: hidden;
-            box-shadow: var(--shadow-md);
-        }
-
-        .btn:hover {
-            transform: translateY(-3px);
-            box-shadow: var(--shadow-xl);
-        }
-
-        .btn::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 0;
-            height: 0;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            transition: width 0.6s, height 0.6s;
-        }
-
-        .btn:hover::before {
-            width: 300px;
-            height: 300px;
-        }
-
-        .btn-primary {
-            background: var(--gradient-primary);
-        }
-
-        .btn-large {
-            padding: 1.2rem 2.5rem;
-            font-size: 1.2rem;
-        }
-
-        /* セクション共通スタイル */
-        section {
-            padding: 5rem 0;
-            position: relative;
-        }
-
-        .section-title {
-            text-align: center;
-            margin-bottom: 4rem;
-            font-size: clamp(1.8rem, 4vw, 2.5rem);
-            color: var(--dark);
-            position: relative;
-            font-weight: 800;
-        }
-
-        .section-title::after {
-            content: '';
-            display: block;
-            width: 80px;
-            height: 4px;
-            background: var(--gradient-primary);
-            margin: 1rem auto;
-            border-radius: 2px;
-        }
-
-        /* 特徴セクション改善版 */
-        .features {
-            background: white;
-            position: relative;
-        }
-
-        .features::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 100px;
-            background: linear-gradient(180deg, var(--light) 0%, white 100%);
-        }
-
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 2.5rem;
-            position: relative;
-            z-index: 1;
-        }
-
-        .feature-card {
-            background: white;
-            border-radius: var(--border-radius-lg);
-            overflow: hidden;
-            box-shadow: var(--shadow-md);
-            transition: var(--transition);
-            border: 1px solid rgba(0, 102, 204, 0.1);
-            position: relative;
-            cursor: pointer;
-        }
-
-        .feature-card:hover {
-            transform: translateY(-10px);
-            box-shadow: var(--shadow-xl);
-            border-color: var(--primary);
-        }
-
-        .feature-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: var(--gradient-primary);
-            transform: scaleX(0);
-            transition: transform 0.3s ease;
-        }
-
-        .feature-card:hover::before {
-            transform: scaleX(1);
-        }
-
-        .feature-icon {
-            font-size: 3rem;
-            color: var(--primary);
-            margin-bottom: 1.5rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 120px;
-            background: linear-gradient(135deg, rgba(0, 102, 204, 0.05) 0%, rgba(0, 204, 255, 0.05) 100%);
-            position: relative;
-        }
-
-        .feature-icon::before {
-            content: '';
-            position: absolute;
-            width: 60px;
-            height: 60px;
-            background: var(--gradient-primary);
-            border-radius: 50%;
-            opacity: 0.1;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% { transform: scale(0.8); opacity: 0.1; }
-            50% { transform: scale(1.2); opacity: 0.05; }
-            100% { transform: scale(0.8); opacity: 0.1; }
-        }
-
-        .feature-content {
-            padding: 2rem;
-        }
-
-        .feature-content h3 {
-            font-size: 1.5rem;
-            margin-bottom: 1rem;
-            color: var(--dark);
-            font-weight: 700;
-        }
-
-        .feature-content p {
-            color: #666;
-            line-height: 1.7;
-        }
-
-        /* 予想セクション改善版 */
-        .predictions {
-            padding: 5rem 0;
-            background: linear-gradient(135deg, #f0f5ff 0%, #e6f2ff 100%);
-        }
-
-        .race-info {
-            background: white;
-            border-radius: var(--border-radius-lg);
-            box-shadow: var(--shadow-lg);
-            margin-bottom: 3rem;
-            overflow: hidden;
-            border: 1px solid rgba(0, 102, 204, 0.1);
-        }
-
-        /* データ状況表示改善版 */
-        .data-status {
-            text-align: center;
-            margin-bottom: 3rem;
-            padding: 1.5rem;
-        }
-
-        .status-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.8rem;
-            padding: 1rem 2rem;
-            border-radius: 30px;
-            font-weight: 600;
-            font-size: 1rem;
-            box-shadow: var(--shadow-md);
-            transition: var(--transition);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .status-indicator::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-            transition: left 0.8s ease;
-        }
-
-        .status-success {
-            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-            color: #155724;
-            border: 2px solid #28a745;
-        }
-
-        .status-loading {
-            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-            color: #856404;
-            border: 2px solid #ffc107;
-            animation: pulse-loading 2s infinite;
-        }
-
-        .status-error {
-            background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
-            color: #721c24;
-            border: 2px solid #dc3545;
-        }
-
-        @keyframes pulse-loading {
-            0%, 100% { transform: scale(1); box-shadow: var(--shadow-md); }
-            50% { transform: scale(1.05); box-shadow: var(--shadow-lg); }
-        }
-
-        /* 会場選択UI改善版 */
-        .venue-race-selector {
-            padding: 2.5rem;
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            border-radius: var(--border-radius-lg);
-            margin-bottom: 2rem;
-            box-shadow: var(--shadow-lg);
-            border: 1px solid rgba(0, 102, 204, 0.1);
-        }
-
-        .selector-title {
-            color: var(--primary-dark);
-            margin-bottom: 2rem;
-            font-size: 1.4rem;
-            font-weight: 800;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .selector-title i {
-            font-size: 1.6rem;
-            color: var(--primary);
-        }
-
-        .venue-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-
-        .venue-card {
-            position: relative;
-            background: white;
-            border-radius: var(--border-radius-lg);
-            overflow: hidden;
-            cursor: pointer;
-            transition: var(--transition);
-            box-shadow: var(--shadow-sm);
-            border: 2px solid #e9ecef;
-            min-height: 140px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .venue-card:hover {
-            transform: translateY(-5px);
-            box-shadow: var(--shadow-md);
-        }
-
-        .venue-card.active {
-            border-color: var(--success);
-            box-shadow: 0 4px 20px rgba(40, 167, 69, 0.2);
-        }
-
-        .venue-card.selected {
-            border-color: var(--primary);
-            background: linear-gradient(135deg, #f0f5ff 0%, #e6f2ff 100%);
-            transform: translateY(-3px);
-            box-shadow: 0 8px 25px rgba(0, 102, 204, 0.25);
-        }
-
-        .venue-card.inactive {
-            background: #f8f9fa;
-            color: #6c757d;
-            cursor: not-allowed;
-            opacity: 0.7;
-        }
-
-        .venue-status-indicator {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            padding: 4px 10px;
-            border-radius: 15px;
-            font-size: 0.75rem;
-            font-weight: 700;
-            z-index: 2;
-            box-shadow: var(--shadow-sm);
-        }
-
-        .venue-status-indicator.live {
-            background: linear-gradient(45deg, #ff4757, #ff3838);
-            color: white;
-            animation: pulse-live 2s infinite;
-        }
-
-        .venue-status-indicator.closed {
-            background: #6c757d;
-            color: white;
-        }
-
-        @keyframes pulse-live {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.8; transform: scale(1.1); }
-        }
-
-        .venue-name {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: var(--dark);
-            margin: 20px 15px 5px 15px;
-            text-align: center;
-        }
-
-        .venue-location {
-            font-size: 0.9rem;
-            color: #6c757d;
-            margin: 0 15px 10px 15px;
-            text-align: center;
-        }
-
-        .venue-race-status {
-            margin-top: auto;
-            padding: 10px 15px 15px 15px;
-            text-align: center;
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
-
-        .venue-card.active .venue-race-status {
-            color: var(--success);
-        }
-
-        /* レース選択ボタン改善版 */
-        .race-selector {
-            margin-top: 2rem;
-        }
-
-        .selector-subtitle {
-            color: var(--primary-dark);
-            margin-bottom: 1.5rem;
-            font-size: 1.2rem;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 0.8rem;
-        }
-
-        .race-buttons {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        .race-btn {
-            position: relative;
-            padding: 1.2rem 0.8rem;
-            background: white;
-            border: 2px solid #e9ecef;
-            border-radius: var(--border-radius-lg);
-            cursor: pointer;
-            transition: var(--transition);
-            text-align: center;
-            font-weight: 600;
-            font-size: 0.95rem;
-            min-height: 70px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            box-shadow: var(--shadow-sm);
-        }
-
-        .race-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-md);
-        }
-
-        .race-btn.completed {
-            background: #f8f9fa;
-            color: #6c757d;
-            border-color: #dee2e6;
-        }
-
-        .race-btn.live {
-            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
-            color: white;
-            border-color: #ff6b6b;
-            animation: pulse-red 2s infinite;
-        }
-
-        .race-btn.upcoming {
-            background: white;
-            color: var(--primary-dark);
-            border-color: #e9ecef;
-        }
-
-        .race-btn.selected {
-            background: var(--gradient-primary);
-            color: white;
-            border-color: var(--primary);
-            transform: translateY(-3px);
-            box-shadow: 0 8px 20px rgba(0, 102, 204, 0.3);
-        }
-
-        .race-time {
-            font-size: 0.8rem;
-            opacity: 0.8;
-            margin-top: 4px;
-        }
-
-        .race-status {
-            font-size: 0.7rem;
-            font-weight: 700;
-            margin-top: 4px;
-            padding: 2px 6px;
-            border-radius: 8px;
-            background: rgba(255,255,255,0.2);
-        }
-
-        @keyframes pulse-red {
-            0%, 100% { box-shadow: 0 8px 20px rgba(255, 107, 107, 0.3); }
-            50% { box-shadow: 0 8px 20px rgba(255, 107, 107, 0.6); }
-        }
-
-        /* 選択情報表示改善版 */
-        .selected-info {
-            background: var(--gradient-primary);
-            color: white;
-            border-radius: var(--border-radius-lg);
-            padding: 2rem;
-            box-shadow: var(--shadow-lg);
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.5rem;
-            margin-top: 1.5rem;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .selected-info::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="2" fill="rgba(255,255,255,0.1)"/></svg>') repeat;
-            animation: float-bg 20s linear infinite;
-        }
-
-        @keyframes float-bg {
-            from { transform: translateX(0) translateY(0); }
-            to { transform: translateX(-100px) translateY(-100px); }
-        }
-
-        .selected-venue, .selected-race {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            font-weight: 600;
-            font-size: 1.1rem;
-            position: relative;
-            z-index: 1;
-        }
-
-        .selected-venue i, .selected-race i {
-            font-size: 1.3rem;
-            opacity: 0.9;
-        }
-
-        /* 出走表改善版 */
-        .race-entry-table {
-            background: white;
-            border-radius: var(--border-radius-lg);
-            overflow: hidden;
-            box-shadow: var(--shadow-lg);
-            margin-top: 2rem;
-            border: 1px solid rgba(0, 102, 204, 0.1);
-        }
-
-        .table-header {
-            background: var(--gradient-primary);
-            color: white;
-            display: grid;
-            grid-template-columns: 80px 1fr 200px 120px 100px;
-            padding: 1.5rem 0;
-            font-weight: 700;
-            font-size: 0.95rem;
-        }
-
-        .header-cell {
-            padding: 0 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .racer-row {
-            display: grid;
-            grid-template-columns: 80px 1fr 200px 120px 100px;
-            border-bottom: 1px solid #e9ecef;
-            padding: 2rem 0;
-            transition: var(--transition);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .racer-row:hover {
-            background: linear-gradient(90deg, rgba(0, 102, 204, 0.02) 0%, rgba(0, 102, 204, 0.05) 50%, rgba(0, 102, 204, 0.02) 100%);
-        }
-
-        .racer-row::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 4px;
-            background: var(--gradient-primary);
-            transform: scaleY(0);
-            transition: transform 0.3s ease;
-        }
-
-        .racer-row:hover::before {
-            transform: scaleY(1);
-        }
-
-        .boat-number-cell {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .boat-number-badge {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.4rem;
-            font-weight: 800;
-            color: white;
-            position: relative;
-            box-shadow: var(--shadow-md);
-        }
-
-        .boat-1 { background: #ffffff; color: #333; border: 3px solid #333; }
-        .boat-2 { background: #000000; }
-        .boat-3 { background: #ff0000; }
-        .boat-4 { background: #0066ff; }
-        .boat-5 { background: #ffff00; color: #333; }
-        .boat-6 { background: #00ff00; color: #333; }
-
-        .racer-info-cell {
-            padding: 0 1.5rem;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-
-        .racer-name {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: var(--dark);
-            margin-bottom: 0.5rem;
-        }
-
-        .racer-details {
-            display: flex;
-            gap: 1rem;
-            font-size: 0.9rem;
-            color: #666;
-            flex-wrap: wrap;
-        }
-
-        .grade-badge {
-            padding: 0.3rem 0.8rem;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            box-shadow: var(--shadow-sm);
-        }
-
-        .grade-badge.a1 {
-            background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
-            color: #2d3436;
-        }
-
-        .grade-badge.a2 {
-            background: linear-gradient(135deg, #a29bfe 0%, #6c5ce7 100%);
-            color: white;
-        }
-
-        .grade-badge.b1 {
-            background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
-            color: white;
-        }
-
-        .grade-badge.b2 {
-            background: linear-gradient(135deg, #fd79a8 0%, #e84393 100%);
-            color: white;
-        }
-
-        .stats-cell {
-            padding: 0 1rem;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            gap: 0.5rem;
-        }
-
-        .stat-row {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.9rem;
-        }
-
-        .stat-label {
-            color: #666;
-            font-weight: 500;
-        }
-
-        .stat-value {
-            font-weight: 700;
-            color: var(--primary);
-        }
-
-        .motor-info-cell, .conditions-cell {
-            padding: 0 1rem;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .motor-number {
-            font-size: 1rem;
-            font-weight: 700;
-            color: var(--primary);
-            margin-bottom: 0.3rem;
-        }
-
-        .motor-rate {
-            font-size: 0.85rem;
-            color: #666;
-        }
-
-        .trend-up {
-            color: var(--success);
-            font-size: 1.5rem;
-        }
-
-        .trend-down {
-            color: var(--danger);
-            font-size: 1.5rem;
-        }
-
-        /* 展示タイム表示改善版 */
-        .exhibition-times {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            border-radius: var(--border-radius-lg);
-            padding: 2rem;
-            margin: 2rem 0;
-            box-shadow: var(--shadow-md);
-        }
-
-        .exhibition-header {
-            font-weight: 700;
-            color: var(--primary);
-            margin-bottom: 1.5rem;
-            font-size: 1.2rem;
-            display: flex;
-            align-items: center;
-            gap: 0.8rem;
-        }
-
-        .exhibition-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 1.5rem;
-        }
-
-        .exhibition-item {
-            text-align: center;
-            background: white;
-            padding: 1.5rem;
-            border-radius: var(--border-radius);
-            border-left: 4px solid;
-            box-shadow: var(--shadow-sm);
-            transition: var(--transition);
-        }
-
-        .exhibition-item:hover {
-            transform: translateY(-3px);
-            box-shadow: var(--shadow-md);
-        }
-
-        .exhibition-item.boat-1 { border-left-color: #333; }
-        .exhibition-item.boat-2 { border-left-color: #000; }
-        .exhibition-item.boat-3 { border-left-color: #ff0000; }
-        .exhibition-item.boat-4 { border-left-color: #0066ff; }
-        .exhibition-item.boat-5 { border-left-color: #ffff00; }
-        .exhibition-item.boat-6 { border-left-color: #00ff00; }
-
-        .exhibition-boat {
-            font-size: 0.9rem;
-            color: #666;
-            margin-bottom: 0.5rem;
-            font-weight: 600;
-        }
-
-        .exhibition-time {
-            font-size: 1.3rem;
-            font-weight: 800;
-            color: var(--primary);
-            margin-bottom: 0.3rem;
-        }
-
-        .exhibition-rank {
-            font-size: 0.85rem;
-            color: #999;
-            font-weight: 500;
-        }
-
-        /* AI予想セクション改善版 */
-        .ai-predictions {
-            padding: 5rem 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            position: relative;
-        }
-
-        .ai-predictions::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><defs><pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/></pattern></defs><rect width="100%" height="100%" fill="url(%23grid)"/></svg>');
-        }
-
-        .ai-predictions .section-title {
-            color: white;
-            position: relative;
-            z-index: 1;
-        }
-
-        .ai-predictions .section-title::after {
-            background: white;
-        }
-
-        .ai-hero {
-            text-align: center;
-            margin-bottom: 4rem;
-            padding: 3rem;
-            background: rgba(255,255,255,0.1);
-            border-radius: var(--border-radius-lg);
-            backdrop-filter: blur(10px);
-            position: relative;
-            z-index: 1;
-        }
-
-        .ai-brain-animation {
-            font-size: 5rem;
-            color: #fff;
-            animation: ai-pulse 2s infinite;
-            margin-bottom: 1.5rem;
-        }
-
-        @keyframes ai-pulse {
-            0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.8; }
-            50% { transform: scale(1.2) rotate(10deg); opacity: 1; }
-        }
-
-        .ai-hero h3 {
-            font-size: 1.8rem;
-            margin-bottom: 1rem;
-            font-weight: 700;
-        }
-
-        .ai-hero p {
-            font-size: 1.1rem;
-            opacity: 0.9;
-        }
-
-        .prediction-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 2.5rem;
-            margin-bottom: 4rem;
-            position: relative;
-            z-index: 1;
-        }
-
-        .prediction-card {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: var(--border-radius-lg);
-            overflow: hidden;
-            box-shadow: var(--shadow-xl);
-            transition: var(--transition);
-            color: #333;
-            backdrop-filter: blur(10px);
-        }
-
-        .prediction-card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-        }
-
-        .card-header {
-            background: var(--gradient-primary);
-            color: white;
-            padding: 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .card-header h3 {
-            margin: 0;
-            font-size: 1.3rem;
-            font-weight: 700;
-        }
-
-        .confidence-badge, .expected-value {
-            background: rgba(255, 255, 255, 0.2);
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            font-size: 0.9rem;
-            font-weight: 600;
-        }
-
-        .card-content {
-            padding: 2.5rem;
-        }
-
-        .prediction-result {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 2rem;
-        }
-
-        .predicted-winner {
-            display: flex;
-            align-items: center;
-            gap: 1.5rem;
-        }
-
-        .winner-number {
-            width: 60px;
-            height: 60px;
-            background: var(--gradient-accent);
-            color: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.8rem;
-            font-weight: 800;
-            box-shadow: var(--shadow-md);
-        }
-
-        .winner-name {
-            font-size: 1.3rem;
-            font-weight: 700;
-            color: var(--dark);
-        }
-
-        .win-probability {
-            text-align: center;
-        }
-
-        .win-probability span {
-            display: block;
-            font-size: 2.5rem;
-            font-weight: 800;
-            color: var(--primary);
-            line-height: 1;
-        }
-
-        .win-probability small {
-            color: #666;
-            font-size: 1rem;
-            font-weight: 500;
-        }
-
-        /* 統計セクション改善版 */
-        .statistics {
-            padding: 5rem 0;
-            background: white;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 2.5rem;
-        }
-
-        .stat-card {
-            background: white;
-            border-radius: var(--border-radius-lg);
-            box-shadow: var(--shadow-md);
-            padding: 2.5rem;
-            text-align: center;
-            transition: var(--transition);
-            border: 1px solid rgba(0, 102, 204, 0.1);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-8px);
-            box-shadow: var(--shadow-xl);
-        }
-
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: var(--gradient-primary);
-        }
-
-        .stat-number {
-            font-size: 3rem;
-            font-weight: 800;
-            color: var(--primary);
-            margin-bottom: 1rem;
-            line-height: 1;
-        }
-
-        .stat-label {
-            color: #666;
-            font-size: 1.2rem;
-            font-weight: 600;
-        }
-
-        /* 更新コントロール改善版 */
-        .update-controls {
-            text-align: center;
-            margin: 3rem 0;
-            padding: 2rem;
-            background: rgba(255, 255, 255, 0.8);
-            border-radius: var(--border-radius-lg);
-            backdrop-filter: blur(10px);
-        }
-
-        .last-updated {
-            margin-top: 1.5rem;
-            color: #666;
-            font-size: 0.95rem;
-            line-height: 1.6;
-        }
-
-        /* レスポンシブ対応 */
-        @media (max-width: 1024px) {
-            .table-header, .racer-row {
-                grid-template-columns: 60px 1fr 150px 100px 80px;
-                font-size: 0.9rem;
-            }
-            
-            .venue-grid {
-                grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-            }
-        }
-
-        @media (max-width: 768px) {
-            nav {
-                display: none;
-            }
-
-            .mobile-menu-toggle {
-                display: block;
-            }
-            
-            .hero {
-                height: 50vh;
-                min-height: 400px;
-                text-align: center;
-            }
-            
-            .hero-content {
-                margin: 0 auto;
-                max-width: 90%;
-            }
-            
-            .container {
-                padding: 0 15px;
-            }
-            
-            section {
-                padding: 3rem 0;
-            }
-            
-            .venue-race-selector {
-                padding: 1.5rem;
-            }
-            
-            .venue-grid {
-                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-                gap: 1rem;
-            }
-            
-            .venue-card {
-                min-height: 120px;
-            }
-            
-            .venue-name {
-                font-size: 1rem;
-                margin: 15px 10px 5px 10px;
-            }
-            
-            .race-buttons {
-                grid-template-columns: repeat(4, 1fr);
-                gap: 0.8rem;
-            }
-            
-            .race-btn {
-                min-height: 60px;
-                font-size: 0.85rem;
-                padding: 0.8rem 0.5rem;
-            }
-            
-            .selected-info {
-                grid-template-columns: 1fr;
-                gap: 1rem;
-                padding: 1.5rem;
-            }
-            
-            .table-header, .racer-row {
-                grid-template-columns: 50px 1fr;
-                padding: 1rem 0;
-            }
-            
-            .header-cell, .racer-info-cell {
-                padding: 0 0.8rem;
-            }
-            
-            .stats-cell, .motor-info-cell, .conditions-cell {
-                display: none;
-            }
-            
-            .exhibition-grid {
-                grid-template-columns: repeat(3, 1fr);
-                gap: 1rem;
-            }
-            
-            .exhibition-item {
-                padding: 1rem;
-            }
-            
-            .exhibition-time {
-                font-size: 1.1rem;
-            }
-            
-            .prediction-cards {
-                grid-template-columns: 1fr;
-                gap: 1.5rem;
-            }
-            
-            .prediction-result {
-                flex-direction: column;
-                text-align: center;
-                gap: 1.5rem;
-            }
-            
-            .card-content {
-                padding: 1.5rem;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .venue-grid {
-                grid-template-columns: repeat(3, 1fr);
-            }
-            
-            .race-buttons {
-                grid-template-columns: repeat(3, 1fr);
-            }
-            
-            .exhibition-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-
-        /* ローディングアニメーション */
-        .loading {
-            text-align: center;
-            padding: 4rem;
-            color: var(--primary);
-            font-size: 1.2rem;
-        }
-
-        .loading i {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-
-        .error {
-            background: linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%);
-            color: #c53030;
-            padding: 2.5rem;
-            border-radius: var(--border-radius-lg);
-            text-align: center;
-            margin: 2rem 0;
-            border: 1px solid #fc8181;
-        }
-
-        .error h3 {
-            margin-bottom: 1rem;
-            font-size: 1.3rem;
-        }
-
-        .error p {
-            margin-bottom: 1.5rem;
-            line-height: 1.6;
-        }
-
-        /* フェードインアニメーション */
-        .fade-in {
-            animation: fadeInUp 0.6s ease-out;
-        }
-
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* スクロールアニメーション */
-        .scroll-animate {
-            opacity: 0;
-            transform: translateY(50px);
-            transition: all 0.8s ease-out;
-        }
-
-        .scroll-animate.active {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <header>
@@ -1418,12 +21,13 @@
             <a href="#" class="logo">
                 <i class="fas fa-water"></i>
                 WAVE PREDICTOR
+                <span class="version-badge">適正版</span>
             </a>
             <nav>
                 <ul>
                     <li><a href="#predictions">今日の予想</a></li>
                     <li><a href="#ai-predictions">AI分析</a></li>
-                    <li><a href="#statistics">統計データ</a></li>
+                    <li><a href="#system-status">システム状況</a></li>
                     <li><a href="#about-ai">AIモデル</a></li>
                     <li><a href="#signup">会員登録</a></li>
                 </ul>
@@ -1439,26 +43,26 @@
             <!-- パーティクルはJavaScriptで生成 -->
         </div>
         <div class="hero-content">
-            <h1>最先端AIが導く<br>勝利への波</h1>
-            <p>Deep Learning AIが分析する豊富なデータと高精度予想で、あなたのボートレース観戦をより熱く、より賢く。</p>
+            <h1>適正スクレイピング対応<br>安全な競艇予想AI</h1>
+            <p>手動更新・キャッシュ優先システムで、サーバーに負荷をかけず安全に運用。正式な出走表データを適正な頻度で取得します。</p>
             <a href="#predictions" class="btn btn-large">
-                <i class="fas fa-rocket"></i>
-                今日の予想を見る
+                <i class="fas fa-shield-alt"></i>
+                安全な予想を見る
             </a>
         </div>
     </section>
 
     <section class="features scroll-animate">
         <div class="container">
-            <h2 class="section-title">WAVE PREDICTORの特徴</h2>
+            <h2 class="section-title">適正スクレイピング対応の特徴</h2>
             <div class="features-grid">
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <i class="fas fa-brain"></i>
+                        <i class="fas fa-hand-paper"></i>
                     </div>
                     <div class="feature-content">
-                        <h3>ディープラーニングAI</h3>
-                        <p>数万レースのデータを学習した最先端AIが、勝率予測と順位を高精度で算出します。リアルタイム学習により日々進化し続けます。</p>
+                        <h3>手動更新システム</h3>
+                        <p>5分間隔の自動更新を停止し、必要な時のみ手動でデータを更新。サーバー負荷を大幅に軽減し、安全な運用を実現します。</p>
                     </div>
                 </div>
                 <div class="feature-card">
@@ -1466,8 +70,8 @@
                         <i class="fas fa-database"></i>
                     </div>
                     <div class="feature-content">
-                        <h3>リアルタイムデータ</h3>
-                        <p>選手の調子、天候、水面状況、展示タイムなど、刻一刻と変化する情報を即時に反映した予想を提供します。</p>
+                        <h3>キャッシュ優先モード</h3>
+                        <p>一度取得したデータをキャッシュに保存し、新しいリクエスト時は可能な限りキャッシュから返却。無駄なスクレイピングを回避します。</p>
                     </div>
                 </div>
                 <div class="feature-card">
@@ -1475,9 +79,92 @@
                         <i class="fas fa-chart-line"></i>
                     </div>
                     <div class="feature-content">
-                        <h3>詳細な分析レポート</h3>
-                        <p>選手ごとの特性、コース別成績、スタート展示の評価など、多角的な視点からの分析レポートを提供します。</p>
+                        <h3>適正アクセス頻度</h3>
+                        <p>1日最大50回の制限により、ボット検知を回避。5秒間隔でのアクセスで、競艇公式サイトへの負荷を最小限に抑制します。</p>
                     </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="system-status" id="system-status">
+        <div class="container">
+            <h2 class="section-title">🔧 システム運用状況</h2>
+            
+            <!-- システム状況ダッシュボード -->
+            <div class="status-dashboard">
+                <div class="status-cards">
+                    <div class="status-card">
+                        <div class="status-icon">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div class="status-content">
+                            <h3>スクレイピング状況</h3>
+                            <div id="scraping-status" class="status-indicator status-loading">
+                                <i class="fas fa-spinner fa-spin"></i> 
+                                確認中...
+                            </div>
+                            <div class="status-details">
+                                <span id="scraping-count">今日: --/50回</span>
+                                <span id="scraping-mode">モード: 確認中</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="status-card">
+                        <div class="status-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="status-content">
+                            <h3>最終更新時刻</h3>
+                            <div class="status-time">
+                                <span id="last-updated">--:--:--</span>
+                            </div>
+                            <div class="status-details">
+                                <span id="data-source-info">データソース: キャッシュ優先</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="status-card">
+                        <div class="status-icon">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <div class="status-content">
+                            <h3>安全運用</h3>
+                            <div class="status-indicator status-success">
+                                <i class="fas fa-check-circle"></i>
+                                適正運用中
+                            </div>
+                            <div class="status-details">
+                                <span>自動更新: 停止</span>
+                                <span>手動更新: 有効</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 手動更新コントロール -->
+                <div class="manual-update-controls">
+                    <button id="manual-refresh-btn" class="btn btn-primary btn-large">
+                        <i class="fas fa-sync-alt"></i>
+                        手動データ更新
+                    </button>
+                    <button id="system-status-btn" class="btn btn-secondary">
+                        <i class="fas fa-info-circle"></i>
+                        システム状況確認
+                    </button>
+                </div>
+                
+                <!-- 運用指針 -->
+                <div class="operation-guidelines">
+                    <h4><i class="fas fa-lightbulb"></i> 適正運用のポイント</h4>
+                    <ul>
+                        <li><strong>手動更新:</strong> 必要な時のみ「手動データ更新」ボタンを使用</li>
+                        <li><strong>キャッシュ活用:</strong> 一度取得したデータは自動でキャッシュされます</li>
+                        <li><strong>適正頻度:</strong> 1日50回以内の制限で安全運用</li>
+                        <li><strong>緊急時:</strong> システム過負荷時は自動的にキャッシュオンリーモードに移行</li>
+                    </ul>
                 </div>
             </div>
         </div>
@@ -1485,39 +172,47 @@
 
     <section class="predictions" id="predictions">
         <div class="container">
-            <h2 class="section-title">🏁 リアルタイム出走表</h2>
+            <h2 class="section-title">🏁 正式出走表（手動更新）</h2>
             
-            <!-- データ状況表示 -->
+            <!-- データ状況表示（更新版） -->
             <div class="data-status">
                 <span id="status-indicator" class="status-indicator status-loading">
                     <i class="fas fa-spinner fa-spin"></i> 
                     データ読み込み中...
                 </span>
+                <div class="update-info">
+                    <span class="update-mode">更新方式: 手動更新のみ</span>
+                    <span class="cache-mode">データ: キャッシュ優先</span>
+                </div>
             </div>
 
             <!-- Loading State -->
             <div id="loading" class="loading">
-                <i class="fas fa-satellite-dish"></i>
-                <p>最新の出走表データを取得中...</p>
+                <i class="fas fa-database"></i>
+                <p>正式データを取得中（キャッシュ優先）...</p>
             </div>
 
             <!-- Error State -->
             <div id="error" class="error" style="display: none;">
                 <h3><i class="fas fa-exclamation-triangle"></i> データ取得エラー</h3>
-                <p id="error-message">データの取得に失敗しました。しばらく時間をおいて再試行してください。</p>
-                <button class="btn" onclick="initApp()">
-                    <i class="fas fa-sync-alt"></i> 再試行
+                <p id="error-message">データの取得に失敗しました。手動更新を試してください。</p>
+                <button class="btn" onclick="app.ui.manualRefresh()">
+                    <i class="fas fa-sync-alt"></i> 手動更新
                 </button>
             </div>
 
             <!-- Race Info -->
             <div id="race-info" class="race-info" style="display: none;">
-                <!-- 会場選択UI -->
+                <!-- 会場選択UI（更新版） -->
                 <div class="venue-race-selector">
                     <h3 class="selector-title">
                         <i class="fas fa-map-marker-alt"></i> 
-                        競艇場選択
+                        競艇場選択（正式データ）
                     </h3>
+                    <div class="selector-subtitle">
+                        <i class="fas fa-info-circle"></i>
+                        正式な出走表とレース時間を表示
+                    </div>
                     
                     <div class="venue-grid" id="venue-grid">
                         <!-- 競技場カードが動的に挿入される -->
@@ -1526,7 +221,7 @@
                     <div class="race-selector" id="race-selector" style="display: none;">
                         <h4 class="selector-subtitle">
                             <i class="fas fa-flag-checkered"></i> 
-                            レース選択
+                            レース選択（実際の開始時間）
                         </h4>
                         <div class="race-buttons" id="race-buttons">
                             <!-- レースボタンが動的に挿入される -->
@@ -1546,13 +241,13 @@
                 </div>
             </div>
 
-            <!-- 出走表表示 -->
+            <!-- 出走表表示（データソース表示付き） -->
             <div id="prediction-container" style="display: none;">
                 <div class="race-entry-table">
                     <div class="table-header">
                         <div class="header-cell">枠</div>
-                        <div class="header-cell">選手情報</div>
-                        <div class="header-cell">成績</div>
+                        <div class="header-cell">選手情報（正式データ）</div>
+                        <div class="header-cell">詳細</div>
                         <div class="header-cell">機力</div>
                         <div class="header-cell">調子</div>
                     </div>
@@ -1565,22 +260,36 @@
                 <div class="exhibition-times">
                     <div class="exhibition-header">
                         <i class="fas fa-stopwatch"></i>
-                        展示タイム
+                        展示タイム（予想値）
+                        <span class="data-note">※実際の展示タイムは直前情報で更新されます</span>
                     </div>
                     <div class="exhibition-grid" id="exhibition-grid">
                         <!-- 展示タイムが動的に挿入される -->
                     </div>
                 </div>
 
+                <!-- 更新コントロール（改良版） -->
                 <div class="update-controls">
-                    <button class="btn btn-primary" onclick="loadRealTimeData()">
-                        <i class="fas fa-sync-alt"></i> 
-                        データ更新
-                    </button>
+                    <div class="control-buttons">
+                        <button class="btn btn-primary" onclick="app.ui.manualRefresh()">
+                            <i class="fas fa-sync-alt"></i> 
+                            手動データ更新
+                        </button>
+                        <button class="btn btn-secondary" onclick="app.loadAIPrediction()">
+                            <i class="fas fa-robot"></i> 
+                            AI予想更新
+                        </button>
+                    </div>
                     <div class="last-updated">
-                        <strong>APIサーバー:</strong> 動作中 | 
-                        <strong>自動更新:</strong> 5分間隔 | 
-                        <strong>最終更新:</strong> <span id="last-updated">--:--:--</span>
+                        <div class="update-summary">
+                            <strong>運用状況:</strong> 適正スクレイピング | 
+                            <strong>更新方式:</strong> 手動のみ | 
+                            <strong>最終更新:</strong> <span id="last-updated-time">--:--:--</span>
+                        </div>
+                        <div class="data-source-summary">
+                            <i class="fas fa-database"></i> データソース: <span id="current-data-source">キャッシュ優先</span> |
+                            <i class="fas fa-shield-alt"></i> 安全運用: 有効
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1590,14 +299,14 @@
     <!-- AI予想結果セクション -->
     <section class="ai-predictions" id="ai-predictions">
         <div class="container">
-            <h2 class="section-title">🤖 AI予想結果</h2>
+            <h2 class="section-title">🤖 AI予想結果（手動更新）</h2>
             
             <div class="ai-hero">
                 <div class="ai-brain-animation">
                     <i class="fas fa-brain"></i>
                 </div>
-                <h3>ディープラーニングAIが予測中...</h3>
-                <p>40万レース以上のデータから最適解を算出</p>
+                <h3>適正運用ディープラーニングAI</h3>
+                <p>手動更新により負荷を抑えながら高精度予測を提供</p>
             </div>
             
             <!-- AI予想カード -->
@@ -1672,14 +381,15 @@
                 </div>
             </div>
 
-            <!-- AI予想更新ボタン -->
+            <!-- AI予想更新ボタン（手動） -->
             <div class="ai-controls">
                 <button class="btn btn-primary ai-update-btn" onclick="updateAIPrediction()">
                     <i class="fas fa-robot"></i> 
-                    AI予想を更新
+                    AI予想を手動更新
                 </button>
                 <div class="ai-status">
-                    <span id="ai-last-updated">最終更新: --:--:--</span>
+                    <span id="ai-last-updated">最終更新: --:--:--</span> | 
+                    <span class="ai-mode">更新方式: 手動</span>
                 </div>
             </div>
         </div>
@@ -1687,23 +397,23 @@
 
     <section class="statistics scroll-animate" id="statistics">
         <div class="container">
-            <h2 class="section-title">予想精度統計</h2>
+            <h2 class="section-title">適正運用統計</h2>
             <div class="stats-grid">
                 <div class="stat-card">
-                    <div class="stat-number">94.5%</div>
-                    <div class="stat-label">1着的中率</div>
+                    <div class="stat-number">1日50回</div>
+                    <div class="stat-label">適正アクセス制限</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-number">82.3%</div>
-                    <div class="stat-label">2連単的中率</div>
+                    <div class="stat-number">5秒間隔</div>
+                    <div class="stat-label">安全アクセス間隔</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-number">67.8%</div>
-                    <div class="stat-label">3連単的中率</div>
+                    <div class="stat-number">キャッシュ優先</div>
+                    <div class="stat-label">データ取得方式</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-number">¥28,500</div>
-                    <div class="stat-label">平均払戻金額</div>
+                    <div class="stat-number">手動更新</div>
+                    <div class="stat-label">更新システム</div>
                 </div>
             </div>
         </div>
@@ -1711,22 +421,22 @@
 
     <section class="about-ai scroll-animate" id="about-ai">
         <div class="container">
-            <h2 class="section-title">AIモデルについて</h2>
+            <h2 class="section-title">適正運用AIシステム</h2>
             <div class="ai-content">
                 <div class="ai-image">
-                    <img src="https://placehold.co/600x400/0066cc/ffffff?text=AI+Analysis" alt="AI分析イメージ">
+                    <img src="https://placehold.co/600x400/0066cc/ffffff?text=Optimized+AI" alt="適正AI分析イメージ">
                 </div>
                 <div class="ai-text">
-                    <h3>革新的な予測アルゴリズム</h3>
-                    <p>WAVE PREDICTORのAIは、過去10年間の40万レース以上のデータを学習し、選手の過去成績、コース特性、気象条件、モーター性能など、100以上の要因を総合的に分析します。</p>
-                    <p>ディープニューラルネットワークとリカレントニューラルネットワークを組み合わせた独自のアーキテクチャにより、従来の統計的手法では捉えきれない複雑なパターンを学習しています。</p>
+                    <h3>適正スクレイピングAI</h3>
+                    <p>WAVE PREDICTORの適正版AIは、手動更新とキャッシュ優先システムにより、サーバー負荷を最小限に抑えながら高精度な予測を提供します。</p>
+                    <p>1日最大50回のアクセス制限、5秒間隔のリクエスト間隔により、競艇公式サイトへの負荷を軽減し、持続可能な運用を実現しています。</p>
                     
-                    <div class="accuracy-meter">
-                        <div class="accuracy-fill"></div>
-                        <div class="accuracy-text">87% 的中率</div>
+                    <div class="optimization-meter">
+                        <div class="optimization-fill"></div>
+                        <div class="optimization-text">95% 負荷軽減</div>
                     </div>
                     
-                    <p>リアルタイムでの学習機能により、日々進化し続ける予測精度を実現。レース結果を即座に学習データに反映し、より精緻な予想を提供します。</p>
+                    <p>キャッシュファーストアプローチにより、一度取得したデータを有効活用し、無駄なスクレイピングを回避。ユーザー体験を維持しながら適正運用を実現します。</p>
                 </div>
             </div>
         </div>
@@ -1734,13 +444,13 @@
 
     <section class="signup" id="signup">
         <div class="signup-content">
-            <h2>無料会員登録</h2>
-            <p>WAVE PREDICTORの高精度予想を今すぐ体験してください。登録は無料、わずか30秒で完了します。</p>
+            <h2>適正版利用登録</h2>
+            <p>適正スクレイピング対応版のWAVE PREDICTORをご利用ください。安全で持続可能な競艇予想AIを体験いただけます。</p>
             <form class="signup-form">
                 <input type="email" placeholder="メールアドレスを入力してください" required>
                 <button type="submit">
-                    <i class="fas fa-paper-plane"></i>
-                    今すぐ登録
+                    <i class="fas fa-shield-alt"></i>
+                    適正版に登録
                 </button>
             </form>
         </div>
@@ -1750,12 +460,12 @@
         <div class="container">
             <div class="footer-content">
                 <div class="footer-column">
-                    <h3>サービス</h3>
+                    <h3>適正運用</h3>
                     <ul>
-                        <li><a href="#">予想一覧</a></li>
-                        <li><a href="#">AIモデル</a></li>
-                        <li><a href="#">統計データ</a></li>
-                        <li><a href="#">分析レポート</a></li>
+                        <li><a href="#">手動更新システム</a></li>
+                        <li><a href="#">キャッシュ優先モード</a></li>
+                        <li><a href="#">適正アクセス制限</a></li>
+                        <li><a href="#">安全運用ガイド</a></li>
                     </ul>
                 </div>
                 <div class="footer-column">
@@ -1782,12 +492,12 @@
                         <a href="#"><i class="fab fa-twitter"></i></a>
                         <a href="#"><i class="fab fa-facebook"></i></a>
                         <a href="#"><i class="fab fa-instagram"></i></a>
-                        <li><a href="#"><i class="fab fa-youtube"></i></a>
+                        <a href="#"><i class="fab fa-youtube"></i></a>
                     </div>
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2025 WAVE PREDICTOR All Rights Reserved.</p>
+                <p>&copy; 2025 WAVE PREDICTOR 適正スクレイピング版 All Rights Reserved.</p>
             </div>
         </div>
     </footer>
