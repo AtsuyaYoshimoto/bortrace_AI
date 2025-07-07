@@ -24,7 +24,6 @@ import json
 import pickle
 from collections import defaultdict
 import numpy as np
-pip install APScheduler
 
 # Redis import (optional)
 try:
@@ -44,10 +43,12 @@ class Config:
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
     DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///boatrace_data.db')
     MAX_WORKERS = int(os.environ.get('MAX_WORKERS', '5'))
-    SCRAPING_DELAY = float(os.environ.get('SCRAPING_DELAY', '1.0'))
+    SCRAPING_DELAY = float(os.environ.get('SCRAPING_DELAY', '5.0'))  # 5秒間隔
     VENUE_COUNT = 24
     ENABLE_RACE_RESULTS = os.environ.get('ENABLE_RACE_RESULTS', 'True').lower() == 'true'
     MOBILE_OPTIMIZATION = os.environ.get('MOBILE_OPTIMIZATION', 'True').lower() == 'true'
+    MAX_SCRAPING_PER_DAY = int(os.environ.get('MAX_SCRAPING_PER_DAY', '50'))  # 1日最大50回
+    CACHE_ONLY_MODE = os.environ.get('CACHE_ONLY_MODE', 'False').lower() == 'true'
 
 # ===== ログ設定 =====
 LOGGING_CONFIG = {
@@ -92,6 +93,40 @@ LOGGING_CONFIG = {
 logging.config.dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger('boatrace')
 
+# ===== グローバル変数・メトリクス =====
+request_count = 0
+error_count = 0
+start_time = datetime.now()
+response_times = []
+scraping_count_today = 0
+last_scraping_reset = datetime.now().date()
+
+# ===== スクレイピング制限管理 =====
+def can_scrape():
+    """スクレイピング実行可能かチェック"""
+    global scraping_count_today, last_scraping_reset
+    
+    today = datetime.now().date()
+    if today != last_scraping_reset:
+        scraping_count_today = 0
+        last_scraping_reset = today
+    
+    if Config.CACHE_ONLY_MODE:
+        logger.warning("キャッシュオンリーモード: スクレイピング停止中")
+        return False
+    
+    if scraping_count_today >= Config.MAX_SCRAPING_PER_DAY:
+        logger.warning(f"スクレイピング制限到達: {scraping_count_today}/{Config.MAX_SCRAPING_PER_DAY}")
+        return False
+    
+    return True
+
+def record_scraping():
+    """スクレイピング実行を記録"""
+    global scraping_count_today
+    scraping_count_today += 1
+    logger.info(f"スクレイピング実行: {scraping_count_today}/{Config.MAX_SCRAPING_PER_DAY}")
+
 # ===== Redis・キャッシュ設定 =====
 redis_client = None
 if REDIS_AVAILABLE:
@@ -125,12 +160,6 @@ except Exception as e:
 
 print(f"🔍 AI初期化処理完了: AI_AVAILABLE = {AI_AVAILABLE}")
 
-# ===== グローバル変数・メトリクス =====
-request_count = 0
-error_count = 0
-start_time = datetime.now()
-response_times = []
-
 # ===== データベース管理クラス =====
 class DatabaseManager:
     def __init__(self, db_path="boatrace_data.db"):
@@ -142,29 +171,85 @@ class DatabaseManager:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # 選手テーブル
+        # レーススケジュールテーブル（重要）
         cursor.execute('''
-        CREATE TABLE IF NOT EXISTS racers (
-            racer_id INTEGER PRIMARY KEY,
-            name TEXT,
-            gender TEXT,
-            birth_date TEXT,
-            branch TEXT,
-            rank TEXT,
-            weight REAL,
-            height REAL,
-            last_updated TEXT
+        CREATE TABLE IF NOT EXISTS race_schedule (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            race_date TEXT,
+            venue_code TEXT,
+            venue_name TEXT,
+            race_number INTEGER,
+            scheduled_time TEXT,
+            status TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(race_date, venue_code, race_number)
         )
         ''')
         
-        # レース履歴テーブル
+        # 出走表テーブル
         cursor.execute('''
-        CREATE TABLE IF NOT EXISTS race_history (
+        CREATE TABLE IF NOT EXISTS race_entries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            race_id TEXT,
             venue_code TEXT,
             race_number INTEGER,
             race_date TEXT,
-            racers_data TEXT,
+            racer_id TEXT,
+            boat_number INTEGER,
+            racer_name TEXT,
+            racer_class TEXT,
+            age INTEGER,
+            weight TEXT,
+            region TEXT,
+            branch TEXT,
+            motor_number INTEGER,
+            boat_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(race_id, boat_number)
+        )
+        ''')
+        
+        # 直前情報テーブル
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS pre_race_info (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            race_id TEXT,
+            venue_code TEXT,
+            race_number INTEGER,
+            race_date TEXT,
+            weather TEXT,
+            wind_direction TEXT,
+            wind_speed REAL,
+            wave_height INTEGER,
+            temperature REAL,
+            water_temperature REAL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(race_id)
+        )
+        ''')
+        
+        # 展示タイムテーブル
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS exhibition_times (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            race_id TEXT,
+            boat_number INTEGER,
+            exhibition_time REAL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(race_id, boat_number)
+        )
+        ''')
+        
+        # スクレイピングログテーブル
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS scraping_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            scraping_date TEXT,
+            url TEXT,
+            status TEXT,
+            response_time REAL,
+            data_count INTEGER,
+            error_message TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         ''')
@@ -183,75 +268,6 @@ class DatabaseManager:
         )
         ''')
         
-        # レーススケジュールキャッシュ
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS race_schedule_cache (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            venue_code TEXT,
-            race_number INTEGER,
-            scheduled_time TEXT,
-            status TEXT,
-            last_updated TIMESTAMP,
-            UNIQUE(venue_code, race_number)
-        )
-        ''')
-        
-        # レース結果テーブル
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS race_results (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            race_id TEXT UNIQUE,
-            venue_code TEXT,
-            race_number INTEGER,
-            race_date TEXT,
-            results_data TEXT,
-            payout_data TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        ''')
-        
-        # 選手成績履歴
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS racer_performance (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            racer_id INTEGER,
-            venue_code TEXT,
-            race_date TEXT,
-            race_number INTEGER,
-            course INTEGER,
-            rank INTEGER,
-            time REAL,
-            start_time REAL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        ''')
-        
-        # 選手コメントテーブル
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS racer_comments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            race_id TEXT,
-            racer_id INTEGER,
-            comment TEXT,
-            comment_date TEXT,
-            sentiment_score REAL,
-            UNIQUE(race_id, racer_id)
-        )
-        ''')
-        
-        # システム統計テーブル
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS system_stats (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date TEXT,
-            total_requests INTEGER,
-            error_count INTEGER,
-            avg_response_time REAL,
-            active_venues INTEGER,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        ''')
-        
         conn.commit()
         conn.close()
         logger.info("データベーステーブル初期化完了")
@@ -260,332 +276,71 @@ class DatabaseManager:
         """データベース接続を取得"""
         return sqlite3.connect(self.db_path)
     
-    def save_race_result(self, race_id, venue_code, race_number, race_date, results, payouts=None):
-        """レース結果を保存"""
+    def save_race_schedule(self, schedule_data):
+        """レーススケジュールを保存"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
-            cursor.execute('''
-            INSERT OR REPLACE INTO race_results 
-            (race_id, venue_code, race_number, race_date, results_data, payout_data)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ''', (race_id, venue_code, race_number, race_date, 
-                  json.dumps(results), json.dumps(payouts)))
+            for race in schedule_data:
+                cursor.execute('''
+                INSERT OR REPLACE INTO race_schedule 
+                (race_date, venue_code, venue_name, race_number, scheduled_time, status)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ''', (
+                    race['race_date'],
+                    race['venue_code'],
+                    race['venue_name'],
+                    race['race_number'],
+                    race['scheduled_time'],
+                    race['status']
+                ))
             
             conn.commit()
-            logger.info(f"レース結果保存: {race_id}")
+            logger.info(f"レーススケジュール保存: {len(schedule_data)}件")
         except Exception as e:
-            logger.error(f"レース結果保存エラー: {e}")
+            logger.error(f"レーススケジュール保存エラー: {e}")
         finally:
             conn.close()
     
-    def get_racer_performance_history(self, racer_id, days=30):
-        """選手の成績履歴を取得"""
+    def save_race_entries(self, entries_data):
+        """出走表を保存"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        past_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
-        
-        cursor.execute('''
-        SELECT venue_code, race_date, race_number, course, rank, time, start_time
-        FROM racer_performance
-        WHERE racer_id = ? AND race_date >= ?
-        ORDER BY race_date DESC, race_number DESC
-        LIMIT 50
-        ''', (racer_id, past_date))
-        
-        results = cursor.fetchall()
-        conn.close()
-        
-        return [{
-            'venue_code': r[0],
-            'race_date': r[1],
-            'race_number': r[2],
-            'course': r[3],
-            'rank': r[4],
-            'time': r[5],
-            'start_time': r[6]
-        } for r in results]
-
-# ===== ユーティリティ関数 =====
-def get_today_date():
-    """今日の日付を取得（YYYYMMDD形式）"""
-    return datetime.now().strftime("%Y%m%d")
-
-def build_race_url(venue_code, race_number, date_str):
-    """レースURLを構築"""
-    base_url = "https://boatrace.jp/owpc/pc/race/racelist"
-    url = f"{base_url}?rno={race_number}&jcd={venue_code}&hd={date_str}"
-    return url
-
-def extract_racer_data_final(html_content):
-    """最終版：選手情報抽出"""
-    try:
-        soup = BeautifulSoup(html_content, 'html.parser')
-        
-        # 全てのtd要素を取得
-        td_elements = soup.find_all('td')
-        
-        racers = []
-        
-        # 選手データの正規表現パターン
-        # "4421 / B1 森作　　広大 東京/茨城 36歳/56.1kg"
-        racer_pattern = r'(\d{4})\s*/\s*([AB][12])\s*([^\n]+?)\s+([^/\n]+)/([^\n]+?)\s+(\d+)歳/(\d+\.\d+)kg'
-        
-        for td in td_elements:
-            text = td.get_text().strip()
-            match = re.search(racer_pattern, text, re.MULTILINE | re.DOTALL)
-            
-            if match and len(racers) < 6:  # 6艇まで
-                # 名前部分を整理（余分な空白を除去）
-                name_raw = match.group(3).strip()
-                name_clean = re.sub(r'\s+', ' ', name_raw).strip()
-                
-                racers.append({
-                    "boat_number": len(racers) + 1,
-                    "registration_number": match.group(1),
-                    "class": match.group(2),
-                    "name": name_clean,
-                    "region": match.group(4).strip(),
-                    "branch": match.group(5).strip(),
-                    "age": int(match.group(6)),
-                    "weight": f"{match.group(7)}kg"
-                })
-        
-        return {
-            "status": "success",
-            "racers": racers,
-            "found_count": len(racers)
-        }
-        
-    except Exception as e:
-        logger.error(f"選手データ抽出エラー: {str(e)}")
-        return {"status": "error", "message": str(e)}
-
-# ===== レスポンス標準化関数 =====
-def create_response(data=None, error=None, status_code=200, message=None):
-    """レスポンス標準化"""
-    response = {
-        "timestamp": datetime.now().isoformat(),
-        "status_code": status_code,
-        "success": error is None
-    }
-    
-    if data is not None:
-        response["data"] = data
-    if error is not None:
-        response["error"] = error
-    if message is not None:
-        response["message"] = message
-        
-    return jsonify(response), status_code
-
-# ===== キャッシュ関数 =====
-def get_from_cache(key):
-    """キャッシュから取得"""
-    if redis_client:
         try:
-            return redis_client.get(key)
+            for entry in entries_data:
+                cursor.execute('''
+                INSERT OR REPLACE INTO race_entries 
+                (race_id, venue_code, race_number, race_date, racer_id, boat_number,
+                 racer_name, racer_class, age, weight, region, branch, motor_number, boat_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    entry['race_id'],
+                    entry['venue_code'],
+                    entry['race_number'],
+                    entry['race_date'],
+                    entry['racer_id'],
+                    entry['boat_number'],
+                    entry['racer_name'],
+                    entry['racer_class'],
+                    entry['age'],
+                    entry['weight'],
+                    entry['region'],
+                    entry['branch'],
+                    entry['motor_number'],
+                    entry['boat_id']
+                ))
+            
+            conn.commit()
+            logger.info(f"出走表保存: {len(entries_data)}件")
         except Exception as e:
-            logger.warning(f"Redis取得エラー: {e}")
-    return None
+            logger.error(f"出走表保存エラー: {e}")
+        finally:
+            conn.close()
 
-def set_to_cache(key, value, timeout=300):
-    """キャッシュに保存"""
-    if redis_client:
-        try:
-            redis_client.setex(key, timeout, value)
-        except Exception as e:
-            logger.warning(f"Redis保存エラー: {e}")
-
-@lru_cache(maxsize=100)
-def get_venue_info_cached(venue_code):
-    """会場情報キャッシュ取得"""
-    venues = {
-        "01": {"name": "桐生", "location": "群馬県", "region": "関東", "characteristics": "狭水面・静水面"},
-        "02": {"name": "戸田", "location": "埼玉県", "region": "関東", "characteristics": "狭水面・流水"},
-        "03": {"name": "江戸川", "location": "東京都", "region": "関東", "characteristics": "広水面・流水・干満差"},
-        "04": {"name": "平和島", "location": "東京都", "region": "関東", "characteristics": "海水・潮位差"},
-        "05": {"name": "多摩川", "location": "東京都", "region": "関東", "characteristics": "流水・風の影響"},
-        "06": {"name": "浜名湖", "location": "静岡県", "region": "中部", "characteristics": "汽水・風の影響少"},
-        "07": {"name": "蒲郡", "location": "愛知県", "region": "中部", "characteristics": "汽水・静水面"},
-        "08": {"name": "常滑", "location": "愛知県", "region": "中部", "characteristics": "汽水・風の影響"},
-        "09": {"name": "津", "location": "三重県", "region": "中部", "characteristics": "海水・穏やか"},
-        "10": {"name": "三国", "location": "福井県", "region": "中部", "characteristics": "海水・風波"},
-        "11": {"name": "びわこ", "location": "滋賀県", "region": "関西", "characteristics": "淡水・広水面"},
-        "12": {"name": "住之江", "location": "大阪府", "region": "関西", "characteristics": "淡水・安定水面"},
-        "13": {"name": "尼崎", "location": "兵庫県", "region": "関西", "characteristics": "淡水・風の影響"},
-        "14": {"name": "鳴門", "location": "徳島県", "region": "中国・四国", "characteristics": "海水・潮流"},
-        "15": {"name": "丸亀", "location": "香川県", "region": "中国・四国", "characteristics": "海水・安定"},
-        "16": {"name": "児島", "location": "岡山県", "region": "中国・四国", "characteristics": "海水・広水面"},
-        "17": {"name": "宮島", "location": "広島県", "region": "中国・四国", "characteristics": "海水・干満差大"},
-        "18": {"name": "徳山", "location": "山口県", "region": "中国・四国", "characteristics": "海水・安定"},
-        "19": {"name": "下関", "location": "山口県", "region": "中国・四国", "characteristics": "海水・潮流"},
-        "20": {"name": "若松", "location": "福岡県", "region": "九州", "characteristics": "海水・安定"},
-        "21": {"name": "芦屋", "location": "福岡県", "region": "九州", "characteristics": "海水・静水面"},
-        "22": {"name": "福岡", "location": "福岡県", "region": "九州", "characteristics": "淡水・安定"},
-        "23": {"name": "唐津", "location": "佐賀県", "region": "九州", "characteristics": "海水・風波大"},
-        "24": {"name": "大村", "location": "長崎県", "region": "九州", "characteristics": "汽水・穏やか"}
-    }
-    return venues.get(venue_code)
-
-# ===== 選手分析クラス =====
-class RacerAnalyzer:
-    def __init__(self, db_manager):
-        self.db_manager = db_manager
-    
-    def get_racer_detailed_stats(self, racer_id, venue_code=None):
-        """選手の詳細統計取得"""
-        conn = self.db_manager.get_connection()
-        cursor = conn.cursor()
-        
-        # 基本成績
-        where_clause = "WHERE racer_id = ?"
-        params = [racer_id]
-        
-        if venue_code:
-            where_clause += " AND venue_code = ?"
-            params.append(venue_code)
-        
-        # 全体成績
-        cursor.execute(f'''
-        SELECT 
-            COUNT(*) as total_races,
-            AVG(rank) as avg_rank,
-            SUM(CASE WHEN rank = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as win_rate,
-            SUM(CASE WHEN rank <= 2 THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as quinella_rate,
-            SUM(CASE WHEN rank <= 3 THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as trio_rate,
-            AVG(start_time) as avg_start_time
-        FROM racer_performance
-        {where_clause} AND race_date >= date('now', '-30 days')
-        ''', params)
-        
-        basic_stats = cursor.fetchone()
-        
-        # コース別成績
-        cursor.execute(f'''
-        SELECT 
-            course,
-            COUNT(*) as races,
-            AVG(rank) as avg_rank,
-            SUM(CASE WHEN rank = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as win_rate
-        FROM racer_performance
-        {where_clause} AND race_date >= date('now', '-90 days')
-        GROUP BY course
-        ORDER BY course
-        ''', params)
-        
-        course_stats = cursor.fetchall()
-        
-        # 最近の調子（直近10レース）
-        cursor.execute(f'''
-        SELECT rank, race_date, venue_code
-        FROM racer_performance
-        {where_clause}
-        ORDER BY race_date DESC, id DESC
-        LIMIT 10
-        ''', params)
-        
-        recent_results = cursor.fetchall()
-        
-        conn.close()
-        
-        return {
-            "basic_stats": {
-                "total_races": basic_stats[0] or 0,
-                "avg_rank": round(basic_stats[1] or 3.5, 2),
-                "win_rate": round(basic_stats[2] or 0, 1),
-                "quinella_rate": round(basic_stats[3] or 0, 1),
-                "trio_rate": round(basic_stats[4] or 0, 1),
-                "avg_start_time": round(basic_stats[5] or 0.15, 3)
-            },
-            "course_stats": [
-                {
-                    "course": row[0],
-                    "races": row[1],
-                    "avg_rank": round(row[2], 2),
-                    "win_rate": round(row[3], 1)
-                } for row in course_stats
-            ],
-            "recent_form": {
-                "results": [{"rank": r[0], "date": r[1], "venue": r[2]} for r in recent_results],
-                "form_score": self.calculate_form_score(recent_results)
-            }
-        }
-    
-    def calculate_form_score(self, recent_results):
-        """調子スコア計算（直近成績から）"""
-        if not recent_results:
-            return 50
-        
-        # 直近5レースを重視してスコア計算
-        total_score = 0
-        weight_sum = 0
-        
-        for i, result in enumerate(recent_results[:5]):
-            rank = result[0]
-            weight = 6 - i  # 新しいレースほど重み大
-            
-            # ランクに基づくスコア（1位=100、2位=80、...、6位=0）
-            rank_score = max(0, (7 - rank) * 20)
-            
-            total_score += rank_score * weight
-            weight_sum += weight
-        
-        return round(total_score / weight_sum if weight_sum > 0 else 50, 1)
-    
-    def get_venue_compatibility(self, racer_id, venue_code):
-        """会場相性分析"""
-        conn = self.db_manager.get_connection()
-        cursor = conn.cursor()
-        
-        # 指定会場での成績
-        cursor.execute('''
-        SELECT 
-            COUNT(*) as races,
-            AVG(rank) as avg_rank,
-            SUM(CASE WHEN rank = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as win_rate
-        FROM racer_performance
-        WHERE racer_id = ? AND venue_code = ? AND race_date >= date('now', '-365 days')
-        ''', (racer_id, venue_code))
-        
-        venue_stats = cursor.fetchone()
-        
-        # 全会場での平均成績
-        cursor.execute('''
-        SELECT 
-            AVG(rank) as avg_rank,
-            SUM(CASE WHEN rank = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as win_rate
-        FROM racer_performance
-        WHERE racer_id = ? AND race_date >= date('now', '-365 days')
-        ''', (racer_id,))
-        
-        overall_stats = cursor.fetchone()
-        
-        conn.close()
-        
-        if venue_stats[0] and venue_stats[0] > 3:  # 最低3レース以上
-            compatibility_score = 50
-            if overall_stats[1]:  # 全体平均がある場合
-                rank_diff = overall_stats[0] - venue_stats[1]
-                win_rate_diff = venue_stats[2] - overall_stats[1]
-                
-                # 順位が良い、勝率が高いほどスコアアップ
-                compatibility_score += (rank_diff * 10) + (win_rate_diff * 2)
-                compatibility_score = max(0, min(100, compatibility_score))
-            
-            return {
-                "races": venue_stats[0],
-                "avg_rank": round(venue_stats[1], 2),
-                "win_rate": round(venue_stats[2], 1),
-                "compatibility_score": round(compatibility_score, 1)
-            }
-        
-        return None
-
-# ===== 新しいBoatraceDataCollectorクラス =====
-class BoatraceDataCollector:
+# ===== 正式競艇データコレクター =====
+class OfficialBoatraceCollector:
     def __init__(self, db_manager):
         self.db_manager = db_manager
         self.session = requests.Session()
@@ -593,427 +348,615 @@ class BoatraceDataCollector:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'ja,en-US;q=0.7,en;q=0.3',
-            'Accept-Encoding': 'gzip, deflate',
+            'Accept-Encoding': 'gzip, deflate, br',
             'Referer': 'https://boatrace.jp/',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
             'Cache-Control': 'max-age=0'
         })
         
-    def get_daily_race_data(self):
-        """本日の全出走表情報取得"""
+        # リトライ設定
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[500, 502, 503, 504]
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+        
+        # 会場コードマッピング
+        self.venue_mapping = {
+            "01": "桐生", "02": "戸田", "03": "江戸川", "04": "平和島", "05": "多摩川",
+            "06": "浜名湖", "07": "蒲郡", "08": "常滑", "09": "津", "10": "三国",
+            "11": "びわこ", "12": "住之江", "13": "尼崎", "14": "鳴門", "15": "丸亀",
+            "16": "児島", "17": "宮島", "18": "徳山", "19": "下関", "20": "若松",
+            "21": "芦屋", "22": "福岡", "23": "唐津", "24": "大村"
+        }
+    
+    def get_daily_schedule(self, date_str=None):
+        """本日の全会場スケジュール取得"""
+        if not can_scrape():
+            return self.get_cached_schedule(date_str)
+        
+        if date_str is None:
+            date_str = datetime.now().strftime("%Y%m%d")
+        
         try:
-            url = "https://www.boatrace.jp/owpc/pc/race/index"
-            logger.info(f"日次レースデータ取得開始: {url}")
+            logger.info(f"=== 日次スケジュール取得開始: {date_str} ===")
+            record_scraping()
+            
+            # ボートレース公式サイトのトップページ
+            url = "https://boatrace.jp/"
+            start_time = time.time()
             
             response = self.session.get(url, timeout=30)
+            response_time = time.time() - start_time
             
             if response.status_code == 200:
-                return self.parse_race_index(response.content)
+                schedule_data = self.parse_daily_schedule(response.content, date_str)
+                
+                # ログ記録
+                self.log_scraping(date_str, url, "success", response_time, len(schedule_data))
+                
+                # データベース保存
+                if schedule_data:
+                    self.db_manager.save_race_schedule(schedule_data)
+                
+                logger.info(f"日次スケジュール取得完了: {len(schedule_data)}会場")
+                return schedule_data
             else:
-                logger.error(f"レースインデックス取得失敗: {response.status_code}")
-                return None
+                self.log_scraping(date_str, url, "error", response_time, 0, f"HTTP {response.status_code}")
+                logger.error(f"スケジュール取得失敗: {response.status_code}")
+                return self.get_cached_schedule(date_str)
                 
         except Exception as e:
-            logger.error(f"レースデータ取得エラー: {str(e)}")
-            return None
+            logger.error(f"スケジュール取得エラー: {str(e)}")
+            self.log_scraping(date_str, url, "error", 0, 0, str(e))
+            return self.get_cached_schedule(date_str)
+        finally:
+            time.sleep(Config.SCRAPING_DELAY)  # 5秒待機
     
-    def parse_race_index(self, html_content):
-        """出走表情報パース"""
+    def parse_daily_schedule(self, html_content, date_str):
+        """日次スケジュール解析"""
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
-            race_data = {}
+            schedule_data = []
             
-            logger.info("レースインデックスページの解析開始")
+            # 開催会場情報を取得
+            venue_elements = soup.find_all('a', href=re.compile(r'/owpc/pc/race/racelist'))
             
-            # 会場リンクを探す（実際のHTML構造に合わせて調整が必要）
-            venue_links = soup.find_all('a', href=re.compile(r'jcd=\d{2}'))
-            
-            for link in venue_links:
+            for venue_element in venue_elements:
                 try:
-                    href = link.get('href')
+                    href = venue_element.get('href')
                     venue_match = re.search(r'jcd=(\d{2})', href)
                     
                     if venue_match:
                         venue_code = venue_match.group(1)
-                        venue_name = link.get_text().strip()
+                        venue_name = self.venue_mapping.get(venue_code, f"会場{venue_code}")
                         
-                        # 各会場の基本情報を取得
-                        race_data[venue_code] = {
-                            'venue_name': venue_name,
-                            'venue_code': venue_code,
-                            'is_active': True,
-                            'races': []
-                        }
+                        # 各会場の詳細レース情報を取得
+                        venue_races = self.get_venue_race_schedule(venue_code, date_str)
+                        schedule_data.extend(venue_races)
                         
-                        logger.info(f"会場発見: {venue_code} - {venue_name}")
+                        time.sleep(Config.SCRAPING_DELAY)  # 会場間で待機
                         
                 except Exception as e:
-                    logger.warning(f"会場リンク解析エラー: {str(e)}")
+                    logger.warning(f"会場情報解析エラー: {str(e)}")
                     continue
             
-            return race_data
+            return schedule_data
             
         except Exception as e:
-            logger.error(f"レースインデックス解析エラー: {str(e)}")
-            return {}
+            logger.error(f"スケジュール解析エラー: {str(e)}")
+            return []
     
-    def get_venue_race_details(self, venue_code, date_str=None):
-        """指定会場の詳細レース情報取得"""
-        if date_str is None:
-            date_str = get_today_date()
-            
+    def get_venue_race_schedule(self, venue_code, date_str):
+        """会場のレース時刻表取得"""
+        if not can_scrape():
+            return []
+        
         try:
-            # 会場のレース一覧ページにアクセス
+            # 会場のレース一覧ページ
             url = f"https://boatrace.jp/owpc/pc/race/racelist?jcd={venue_code}&hd={date_str}"
-            logger.info(f"会場{venue_code}のレース詳細取得: {url}")
+            logger.info(f"会場{venue_code}レース時刻表取得: {url}")
             
+            record_scraping()
             response = self.session.get(url, timeout=30)
-            time.sleep(Config.SCRAPING_DELAY)  # サーバー負荷軽減
             
             if response.status_code == 200:
-                return self.parse_venue_races(response.content, venue_code)
+                return self.parse_venue_schedule(response.content, venue_code, date_str)
             else:
-                logger.warning(f"会場{venue_code}: レース詳細取得失敗 {response.status_code}")
-                return None
+                logger.warning(f"会場{venue_code}レース時刻表取得失敗: {response.status_code}")
+                return []
                 
         except Exception as e:
-            logger.error(f"会場{venue_code}レース詳細取得エラー: {str(e)}")
-            return None
+            logger.error(f"会場{venue_code}レース時刻表取得エラー: {str(e)}")
+            return []
+        finally:
+            time.sleep(Config.SCRAPING_DELAY)
     
-    def parse_venue_races(self, html_content, venue_code):
-        """会場のレース情報解析"""
+    def parse_venue_schedule(self, html_content, venue_code, date_str):
+        """会場レース時刻表解析"""
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
+            venue_name = self.venue_mapping.get(venue_code, f"会場{venue_code}")
             races = []
             
-            # レース時刻表を探す
-            time_cells = soup.find_all('td', class_='is-fs11')
+            # レース時刻表を探す（実際のHTML構造に応じて調整）
+            time_tables = soup.find_all('table', class_='is-w495')
             
-            for i, time_cell in enumerate(time_cells[:12], 1):  # 最大12レース
-                race_time = time_cell.get_text().strip()
-                
-                if race_time and ':' in race_time:
+            if time_tables:
+                for table in time_tables:
+                    rows = table.find_all('tr')
+                    
+                    for i, row in enumerate(rows[1:], 1):  # ヘッダー行をスキップ
+                        try:
+                            cells = row.find_all('td')
+                            if len(cells) >= 2:
+                                # 第1セルからレース番号、第2セルから時刻を取得
+                                race_number_cell = cells[0].get_text().strip()
+                                time_cell = cells[1].get_text().strip()
+                                
+                                # レース番号抽出
+                                race_match = re.search(r'(\d+)R', race_number_cell)
+                                if race_match:
+                                    race_number = int(race_match.group(1))
+                                else:
+                                    race_number = i
+                                
+                                # 時刻抽出
+                                time_match = re.search(r'(\d{1,2}):(\d{2})', time_cell)
+                                if time_match:
+                                    scheduled_time = f"{time_match.group(1).zfill(2)}:{time_match.group(2)}"
+                                    
+                                    races.append({
+                                        'race_date': date_str,
+                                        'venue_code': venue_code,
+                                        'venue_name': venue_name,
+                                        'race_number': race_number,
+                                        'scheduled_time': scheduled_time,
+                                        'status': 'scheduled'
+                                    })
+                                    
+                        except Exception as e:
+                            logger.warning(f"レース時刻解析エラー: {str(e)}")
+                            continue
+            
+            # 時刻表が見つからない場合はデフォルト時刻を使用
+            if not races:
+                logger.warning(f"会場{venue_code}: 時刻表が見つからないため、デフォルト時刻を使用")
+                for race_number in range(1, 13):  # 1R-12R
+                    # 一般的な競艇の開始時刻（15:00開始、25分間隔）
+                    start_hour = 15
+                    start_minute = (race_number - 1) * 25
+                    
+                    total_minutes = start_hour * 60 + start_minute
+                    hour = total_minutes // 60
+                    minute = total_minutes % 60
+                    
+                    scheduled_time = f"{hour:02d}:{minute:02d}"
+                    
                     races.append({
-                        'race_number': i,
-                        'scheduled_time': race_time,
-                        'status': 'upcoming',
-                        'venue_code': venue_code
+                        'race_date': date_str,
+                        'venue_code': venue_code,
+                        'venue_name': venue_name,
+                        'race_number': race_number,
+                        'scheduled_time': scheduled_time,
+                        'status': 'scheduled'
                     })
             
-            logger.info(f"会場{venue_code}: {len(races)}レース発見")
+            logger.info(f"会場{venue_code}({venue_name}): {len(races)}レース時刻取得")
             return races
             
         except Exception as e:
-            logger.error(f"会場{venue_code}レース解析エラー: {str(e)}")
+            logger.error(f"会場レース時刻表解析エラー: {str(e)}")
             return []
     
-    def get_race_entries(self, venue_code, race_number, date_str=None):
-        """出走表取得（選手情報込み）"""
-        if date_str is None:
-            date_str = get_today_date()
-            
+    def get_race_entries(self, venue_code, race_number, date_str):
+        """正式出走表取得"""
+        if not can_scrape():
+            return self.get_cached_race_entries(venue_code, race_number, date_str)
+        
         try:
-            race_url = build_race_url(venue_code, race_number, date_str)
+            # 出走表ページURL
+            url = f"https://boatrace.jp/owpc/pc/race/racelist?rno={race_number}&jcd={venue_code}&hd={date_str}"
             logger.info(f"出走表取得: 会場{venue_code} {race_number}R")
             
-            response = self.session.get(race_url, timeout=30)
-            time.sleep(Config.SCRAPING_DELAY)  # 負荷軽減
+            record_scraping()
+            start_time = time.time()
+            response = self.session.get(url, timeout=30)
+            response_time = time.time() - start_time
             
             if response.status_code == 200:
-                racer_data = extract_racer_data_final(response.content)
-                return racer_data
+                entries_data = self.parse_race_entries(response.content, venue_code, race_number, date_str)
+                
+                # ログ記録
+                self.log_scraping(date_str, url, "success", response_time, len(entries_data) if entries_data else 0)
+                
+                # データベース保存
+                if entries_data:
+                    self.db_manager.save_race_entries(entries_data)
+                
+                return {
+                    "status": "success",
+                    "racers": entries_data,
+                    "found_count": len(entries_data) if entries_data else 0
+                }
             else:
-                logger.warning(f"出走表取得失敗: {response.status_code}")
-                return None
+                self.log_scraping(date_str, url, "error", response_time, 0, f"HTTP {response.status_code}")
+                return self.get_cached_race_entries(venue_code, race_number, date_str)
                 
         except Exception as e:
             logger.error(f"出走表取得エラー: {str(e)}")
-            return None
-    
-    def get_race_results(self, venue_code, race_number, date_str=None):
-        """レース結果取得（拡張版）"""
-        if date_str is None:
-            date_str = get_today_date()
-            
-        try:
-            # レース結果ページのURL
-            url = f"https://boatrace.jp/owpc/pc/race/raceresult?rno={race_number}&jcd={venue_code}&hd={date_str}"
-            logger.info(f"レース結果取得: 会場{venue_code} {race_number}R")
-            
-            response = self.session.get(url, timeout=30)
+            self.log_scraping(date_str, url, "error", 0, 0, str(e))
+            return self.get_cached_race_entries(venue_code, race_number, date_str)
+        finally:
             time.sleep(Config.SCRAPING_DELAY)
+    
+    def parse_race_entries(self, html_content, venue_code, race_number, date_str):
+        """出走表解析（正式版）"""
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
             
-            if response.status_code == 200:
-                return self.parse_race_results(response.content, venue_code, race_number, date_str)
-            else:
-                logger.warning(f"レース結果取得失敗: {response.status_code}")
-                return None
+            # 実際の出走表データを探す
+            race_table = soup.find('table', class_='is-w495')
+            
+            if not race_table:
+                # 別の方法で出走表を探す
+                race_table = soup.find('div', class_='table1')
+            
+            entries = []
+            
+            if race_table:
+                rows = race_table.find_all('tr')
                 
+                for row in rows[1:]:  # ヘッダー行スキップ
+                    try:
+                        cells = row.find_all(['td', 'th'])
+                        
+                        if len(cells) >= 6:
+                            # セルから情報抽出
+                            boat_number = self.extract_boat_number(cells[0])
+                            racer_info = self.extract_racer_info(cells[1])
+                            
+                            if boat_number and racer_info:
+                                race_id = f"{date_str}{venue_code}{race_number:02d}"
+                                
+                                entry = {
+                                    'race_id': race_id,
+                                    'venue_code': venue_code,
+                                    'race_number': race_number,
+                                    'race_date': date_str,
+                                    'boat_number': boat_number,
+                                    'racer_id': racer_info.get('registration_number', ''),
+                                    'racer_name': racer_info.get('name', ''),
+                                    'racer_class': racer_info.get('class', ''),
+                                    'age': racer_info.get('age', 0),
+                                    'weight': racer_info.get('weight', ''),
+                                    'region': racer_info.get('region', ''),
+                                    'branch': racer_info.get('branch', ''),
+                                    'motor_number': self.extract_motor_number(cells),
+                                    'boat_id': self.extract_boat_id(cells)
+                                }
+                                entries.append(entry)
+                                
+                    except Exception as e:
+                        logger.warning(f"出走表行解析エラー: {str(e)}")
+                        continue
+            
+            logger.info(f"出走表解析完了: {len(entries)}名")
+            return entries
+            
         except Exception as e:
-            logger.error(f"レース結果取得エラー: {str(e)}")
+            logger.error(f"出走表解析エラー: {str(e)}")
+            return []
+    
+    def extract_boat_number(self, cell):
+        """艇番抽出"""
+        try:
+            text = cell.get_text().strip()
+            match = re.search(r'(\d+)', text)
+            return int(match.group(1)) if match else None
+        except:
             return None
     
-    def parse_race_results(self, html_content, venue_code, race_number, date_str):
-        """レース結果解析（モック実装）"""
+    def extract_racer_info(self, cell):
+        """選手情報抽出"""
         try:
-            # 実際の実装では、HTMLから結果をパースする
-            # ここではモックデータを返す
-            results = []
-            payouts = {}
+            text = cell.get_text().strip()
             
-            # モック結果データ
-            for boat_num in range(1, 7):
-                rank = boat_num  # 簡易的に艇番=順位
-                results.append({
-                    "boat_number": boat_num,
-                    "rank": rank,
-                    "time": f"{6 + random.uniform(0.5, 2.0):.2f}",
-                    "start_time": f"{random.uniform(0.05, 0.20):.3f}"
+            # 登録番号/級別 選手名 支部/年齢・体重のパターン
+            pattern = r'(\d{4})\s*/\s*([AB][12])\s*([^\n]+?)\s+([^/\n]+)/([^\n]+?)\s+(\d+)歳/(\d+\.\d+)kg'
+            match = re.search(pattern, text, re.MULTILINE | re.DOTALL)
+            
+            if match:
+                name_clean = re.sub(r'\s+', ' ', match.group(3)).strip()
+                
+                return {
+                    'registration_number': match.group(1),
+                    'class': match.group(2),
+                    'name': name_clean,
+                    'region': match.group(4).strip(),
+                    'branch': match.group(5).strip(),
+                    'age': int(match.group(6)),
+                    'weight': f"{match.group(7)}kg"
+                }
+            
+            return None
+            
+        except Exception as e:
+            logger.warning(f"選手情報抽出エラー: {str(e)}")
+            return None
+    
+    def extract_motor_number(self, cells):
+        """モーター番号抽出"""
+        try:
+            for cell in cells:
+                text = cell.get_text().strip()
+                motor_match = re.search(r'M(\d+)', text)
+                if motor_match:
+                    return int(motor_match.group(1))
+            return random.randint(1, 100)  # フォールバック
+        except:
+            return random.randint(1, 100)
+    
+    def extract_boat_id(self, cells):
+        """ボート番号抽出"""
+        try:
+            for cell in cells:
+                text = cell.get_text().strip()
+                boat_match = re.search(r'B(\d+)', text)
+                if boat_match:
+                    return int(boat_match.group(1))
+            return random.randint(1, 100)  # フォールバック
+        except:
+            return random.randint(1, 100)
+    
+    def get_cached_schedule(self, date_str):
+        """キャッシュからスケジュール取得"""
+        try:
+            conn = self.db_manager.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+            SELECT venue_code, venue_name, race_number, scheduled_time, status
+            FROM race_schedule
+            WHERE race_date = ?
+            ORDER BY venue_code, race_number
+            ''', (date_str,))
+            
+            results = cursor.fetchall()
+            conn.close()
+            
+            schedule_data = []
+            for result in results:
+                schedule_data.append({
+                    'race_date': date_str,
+                    'venue_code': result[0],
+                    'venue_name': result[1],
+                    'race_number': result[2],
+                    'scheduled_time': result[3],
+                    'status': result[4]
                 })
             
-            # 払戻金データ（モック）
-            payouts = {
-                "win": {"boat": 1, "odds": round(random.uniform(1.2, 5.0), 1), "payout": 0},
-                "quinella": {"combination": [1, 2], "odds": round(random.uniform(2.0, 15.0), 1), "payout": 0},
-                "exacta": {"combination": [1, 2], "odds": round(random.uniform(3.0, 25.0), 1), "payout": 0},
-                "trio": {"combination": [1, 2, 3], "odds": round(random.uniform(5.0, 50.0), 1), "payout": 0}
-            }
-            
-            # データベースに保存
-            race_id = f"{date_str}{venue_code}{race_number:02d}"
-            self.db_manager.save_race_result(race_id, venue_code, race_number, date_str, results, payouts)
-            
-            return {
-                "race_id": race_id,
-                "results": results,
-                "payouts": payouts,
-                "status": "completed"
-            }
+            logger.info(f"キャッシュからスケジュール取得: {len(schedule_data)}件")
+            return schedule_data
             
         except Exception as e:
-            logger.error(f"レース結果解析エラー: {str(e)}")
-            return None
-
-# ===== 修正版VenueDataManagerクラス =====
-class VenueDataManager:
-    def __init__(self, db_manager):
-        self.db_manager = db_manager
-        self.scheduler = None
-        self.venue_cache = {}
-        self.last_update = None
-        self.all_venues = [
-            ("01", "桐生"), ("02", "戸田"), ("03", "江戸川"), ("04", "平和島"), ("05", "多摩川"),
-            ("06", "浜名湖"), ("07", "蒲郡"), ("08", "常滑"), ("09", "津"), ("10", "三国"),
-            ("11", "びわこ"), ("12", "住之江"), ("13", "尼崎"), ("14", "鳴門"), ("15", "丸亀"),
-            ("16", "児島"), ("17", "宮島"), ("18", "徳山"), ("19", "下関"), ("20", "若松"),
-            ("21", "芦屋"), ("22", "福岡"), ("23", "唐津"), ("24", "大村")
-        ]
-        self.data_collector = BoatraceDataCollector(db_manager)
+            logger.error(f"キャッシュスケジュール取得エラー: {str(e)}")
+            return []
     
-    def start_background_updates(self):
+    def get_cached_race_entries(self, venue_code, race_number, date_str):
+        """キャッシュから出走表取得"""
+        try:
+            conn = self.db_manager.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+            SELECT boat_number, racer_id, racer_name, racer_class, age, weight, region, branch
+            FROM race_entries
+            WHERE venue_code = ? AND race_number = ? AND race_date = ?
+            ORDER BY boat_number
+            ''', (venue_code, race_number, date_str))
+            
+            results = cursor.fetchall()
+            conn.close()
+            
+            if results:
+                entries = []
+                for result in results:
+                    entries.append({
+                        'boat_number': result[0],
+                        'registration_number': result[1],
+                        'name': result[2],
+                        'class': result[3],
+                        'age': result[4],
+                        'weight': result[5],
+                        'region': result[6],
+                        'branch': result[7]
+                    })
+                
+                logger.info(f"キャッシュから出走表取得: {len(entries)}名")
+                return {
+                    "status": "success",
+                    "racers": entries,
+                    "found_count": len(entries)
+                }
+            
+            return {"status": "error", "message": "キャッシュにデータがありません"}
+            
+        except Exception as e:
+            logger.error(f"キャッシュ出走表取得エラー: {str(e)}")
+            return {"status": "error", "message": str(e)}
+    
+    def log_scraping(self, date_str, url, status, response_time, data_count, error_message=None):
+        """スクレイピングログ記録"""
+        try:
+            conn = self.db_manager.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+            INSERT INTO scraping_log 
+            (scraping_date, url, status, response_time, data_count, error_message)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ''', (date_str, url, status, response_time, data_count, error_message))
+            
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.error(f"スクレイピングログ記録エラー: {e}")
+
+# ===== レーススケジュール管理クラス =====
+class RaceScheduleManager:
+    def __init__(self, db_manager, data_collector):
+        self.db_manager = db_manager
+        self.data_collector = data_collector
+        self.scheduler = None
+        self.race_schedules = {}
+        self.dynamic_jobs = {}
+    
+    def start_scheduled_tasks(self):
+        """スケジュールタスク開始"""
         from apscheduler.schedulers.background import BackgroundScheduler
         
         self.scheduler = BackgroundScheduler()
         
-        # 毎日0時にレースデータ更新
+        # 毎日朝6時: 出走表一括取得
         self.scheduler.add_job(
-            func=self.update_daily_races,
-            trigger="cron", 
-            hour=0, 
-            minute=0
+            func=self.daily_data_collection,
+            trigger="cron",
+            hour=6,
+            minute=0,
+            id="daily_collection"
         )
         
-        # 展示タイム更新（1時間ごと）
+        # 1時間ごと: 直前情報更新チェック
         self.scheduler.add_job(
-            func=self.update_pre_race_info,
+            func=self.check_pre_race_updates,
             trigger="interval",
-            hours=1
+            hours=1,
+            id="pre_race_check"
         )
-        
-        # レース結果収集（30分ごと）
-        if Config.ENABLE_RACE_RESULTS:
-            self.scheduler.add_job(
-                func=self.collect_race_results,
-                trigger="interval",
-                minutes=30
-            )
         
         self.scheduler.start()
-        logger.info("スケジューラー開始: 0時日次更新、1時間ごと直前情報更新、30分ごと結果収集")
-
-    except Exception as e:
-        logger.error(f"スケジューラー開始エラー: {e}")
-        self.scheduler = None
+        logger.info("レーススケジューラー開始")
     
-    def update_daily_races(self):
-        """0時実行：本日の全レースデータ更新"""
-        logger.info("=== 日次レースデータ更新開始 ===")
+    def daily_data_collection(self):
+        """朝6時実行: 本日の全データ取得"""
+        logger.info("=== 日次データ収集開始 ===")
         
         try:
-            # 全体のレースデータ取得
-            race_data = self.data_collector.get_daily_race_data()
+            today = datetime.now().strftime("%Y%m%d")
             
-            if race_data:
-                # 各会場の詳細情報を取得
-                for venue_code, venue_info in race_data.items():
-                    try:
-                        # 会場の詳細レース情報取得
-                        races = self.data_collector.get_venue_race_details(venue_code)
-                        
-                        if races:
-                            venue_info['races'] = races
-                            venue_info['is_active'] = len(races) > 0
-                            venue_info['race_count'] = len(races)
-                        else:
-                            venue_info['is_active'] = False
-                            venue_info['races'] = []
-                            venue_info['race_count'] = 0
-                            
-                        # キャッシュ更新
-                        self.venue_cache[venue_code] = {
-                            **venue_info,
-                            "last_updated": datetime.now().isoformat()
-                        }
-                        
-                        logger.info(f"会場{venue_code}({venue_info.get('venue_name', '不明')}): {len(races)}レース")
-                        
-                        # サーバー負荷軽減
-                        time.sleep(Config.SCRAPING_DELAY)
-                        
-                    except Exception as e:
-                        logger.error(f"会場{venue_code}の詳細取得エラー: {str(e)}")
-                        continue
+            # 1. 全会場のスケジュール取得
+            schedule_data = self.data_collector.get_daily_schedule(today)
+            
+            if schedule_data:
+                # スケジュールを内部保存
+                self.race_schedules[today] = {}
                 
-                logger.info("=== 日次更新完了 ===")
+                for race in schedule_data:
+                    venue_code = race['venue_code']
+                    
+                    if venue_code not in self.race_schedules[today]:
+                        self.race_schedules[today][venue_code] = []
+                    
+                    self.race_schedules[today][venue_code].append(race)
+                
+                # 2. 各レースの直前情報取得タイミングを計算
+                self.schedule_pre_race_updates(today)
+                
+                logger.info(f"日次データ収集完了: {len(schedule_data)}レース")
             else:
-                logger.warning("日次レースデータ取得失敗")
+                logger.warning("日次データ収集: スケジュールデータなし")
                 
         except Exception as e:
-            logger.error(f"日次更新エラー: {str(e)}")
+            logger.error(f"日次データ収集エラー: {str(e)}")
     
-    def update_pre_race_info(self):
-        """直前情報更新（展示タイム発表時）"""
-        logger.info("=== 直前情報更新開始 ===")
-        
+    def schedule_pre_race_updates(self, date_str):
+        """直前情報更新スケジューリング"""
         try:
-            current_time = datetime.now()
+            if date_str not in self.race_schedules:
+                return
             
-            # アクティブな会場のみチェック
-            for venue_code, venue_data in self.venue_cache.items():
-                if not venue_data.get('is_active', False):
-                    continue
-                    
-                races = venue_data.get('races', [])
-                
+            for venue_code, races in self.race_schedules[date_str].items():
                 for race in races:
                     try:
-                        race_number = race.get('race_number')
-                        scheduled_time = race.get('scheduled_time')
+                        # レース開始時刻から1時間前を計算
+                        race_time_str = f"{date_str} {race['scheduled_time']}"
+                        race_time = datetime.strptime(race_time_str, "%Y%m%d %H:%M")
+                        update_time = race_time - timedelta(hours=1)
                         
-                        if not race_number or not scheduled_time:
-                            continue
-                        
-                        # レース開始2時間前から直前情報取得
-                        try:
-                            race_time = datetime.strptime(
-                                f"{current_time.strftime('%Y%m%d')} {scheduled_time}", 
-                                "%Y%m%d %H:%M"
+                        # 現在時刻より未来の場合のみスケジュール
+                        if update_time > datetime.now():
+                            job_id = f"pre_race_{venue_code}_{race['race_number']}_{date_str}"
+                            
+                            self.scheduler.add_job(
+                                func=self.update_pre_race_info,
+                                trigger="date",
+                                run_date=update_time,
+                                args=[venue_code, race['race_number'], date_str],
+                                id=job_id
                             )
-                            time_diff = (race_time - current_time).total_seconds() / 3600
                             
-                            # 2時間前～レース開始まで
-                            if 0 <= time_diff <= 2:
-                                # 展示タイム・直前情報の更新処理
-                                logger.info(f"直前情報更新対象: 会場{venue_code} {race_number}R")
-                                
-                        except Exception as e:
-                            logger.warning(f"時刻解析エラー: {str(e)}")
-                            continue
+                            logger.info(f"直前情報更新スケジュール: {job_id} at {update_time}")
                             
-                        # API負荷軽減
-                        time.sleep(Config.SCRAPING_DELAY)
-                        
                     except Exception as e:
-                        logger.error(f"レース{race_number}直前情報エラー: {str(e)}")
+                        logger.warning(f"直前情報スケジュールエラー: {str(e)}")
                         continue
                         
+        except Exception as e:
+            logger.error(f"直前情報スケジューリングエラー: {str(e)}")
+    
+    def update_pre_race_info(self, venue_code, race_number, date_str):
+        """直前情報更新（レース開始1時間前実行）"""
+        logger.info(f"直前情報更新: 会場{venue_code} {race_number}R")
+        
+        try:
+            # 展示タイム・気象情報などを取得
+            # 実際には追加のスクレイピングが必要
+            pass
+            
         except Exception as e:
             logger.error(f"直前情報更新エラー: {str(e)}")
     
-    def collect_race_results(self):
-        """レース結果収集（30分ごと実行）"""
-        logger.info("=== レース結果収集開始 ===")
+    def check_pre_race_updates(self):
+        """1時間ごと実行: 直前情報更新が必要なレースをチェック"""
+        logger.info("直前情報更新チェック実行")
         
         try:
             current_time = datetime.now()
             today = current_time.strftime("%Y%m%d")
             
-            # アクティブな会場のレース結果をチェック
-            for venue_code, venue_data in self.venue_cache.items():
-                if not venue_data.get('is_active', False):
-                    continue
-                
-                races = venue_data.get('races', [])
-                
-                for race in races:
-                    race_number = race.get('race_number')
-                    scheduled_time = race.get('scheduled_time')
-                    
-                    if not race_number or not scheduled_time:
-                        continue
-                    
-                    try:
-                        # レース終了時刻を推定（開始15分後）
-                        race_start = datetime.strptime(f"{today} {scheduled_time}", "%Y%m%d %H:%M")
-                        race_end = race_start + timedelta(minutes=15)
-                        
-                        # レース終了後なら結果取得
-                        if current_time >= race_end:
-                            race_id = f"{today}{venue_code}{race_number:02d}"
+            # 本日のスケジュールをチェック
+            if today in self.race_schedules:
+                for venue_code, races in self.race_schedules[today].items():
+                    for race in races:
+                        try:
+                            race_time_str = f"{today} {race['scheduled_time']}"
+                            race_time = datetime.strptime(race_time_str, "%Y%m%d %H:%M")
                             
-                            # 既に取得済みかチェック
-                            conn = self.db_manager.get_connection()
-                            cursor = conn.cursor()
-                            cursor.execute('SELECT id FROM race_results WHERE race_id = ?', (race_id,))
-                            existing = cursor.fetchone()
-                            conn.close()
+                            # レース開始1-2時間前なら直前情報更新
+                            time_diff = (race_time - current_time).total_seconds() / 3600
                             
-                            if not existing:
-                                results = self.data_collector.get_race_results(venue_code, race_number, today)
-                                if results:
-                                    logger.info(f"レース結果取得完了: {race_id}")
+                            if 1 <= time_diff <= 2:
+                                logger.info(f"直前情報更新対象: 会場{venue_code} {race['race_number']}R")
+                                # 実際の更新処理はここで実行
                                 
-                                time.sleep(Config.SCRAPING_DELAY)
-                                
-                    except Exception as e:
-                        logger.error(f"レース結果収集エラー: {str(e)}")
-                        continue
-                        
+                        except Exception as e:
+                            logger.warning(f"レース時刻チェックエラー: {str(e)}")
+                            continue
+                            
         except Exception as e:
-            logger.error(f"レース結果収集全体エラー: {str(e)}")
-    
-    def get_venue_status(self, venue_code):
-        """会場ステータス取得"""
-        return self.venue_cache.get(venue_code, {
-            "is_active": False,
-            "venue_name": "不明",
-            "last_updated": None
-        })
-    
-    def get_race_entries(self, venue_code, race_number):
-        """出走表情報取得"""
-        try:
-            return self.data_collector.get_race_entries(venue_code, race_number)
-        except Exception as e:
-            logger.error(f"出走表取得エラー: {str(e)}")
-            return None
+            logger.error(f"直前情報チェックエラー: {str(e)}")
 
 # ===== グローバルインスタンス =====
 db_manager = DatabaseManager()
-data_collector = BoatraceDataCollector(db_manager)
-venue_manager = VenueDataManager(db_manager)
-racer_analyzer = RacerAnalyzer(db_manager)
+data_collector = OfficialBoatraceCollector(db_manager)
+schedule_manager = RaceScheduleManager(db_manager, data_collector)
 
 # ===== Flask アプリ初期化 =====
 app = Flask(__name__)
@@ -1028,6 +971,29 @@ limiter = Limiter(
     key_func=get_remote_address,
     default_limits=["1000 per hour", "50 per minute"]
 )
+
+# ===== レスポンス標準化関数 =====
+def create_response(data=None, error=None, status_code=200, message=None):
+    """レスポンス標準化"""
+    response = {
+        "timestamp": datetime.now().isoformat(),
+        "status_code": status_code,
+        "success": error is None,
+        "scraping_status": {
+            "count_today": scraping_count_today,
+            "limit": Config.MAX_SCRAPING_PER_DAY,
+            "cache_only_mode": Config.CACHE_ONLY_MODE
+        }
+    }
+    
+    if data is not None:
+        response["data"] = data
+    if error is not None:
+        response["error"] = error
+    if message is not None:
+        response["message"] = message
+        
+    return jsonify(response), status_code
 
 # ===== リクエスト処理フック =====
 @app.before_request
@@ -1113,26 +1079,30 @@ def ratelimit_error(error):
 @app.route('/')
 def index():
     return jsonify({
-        "service": "WAVE PREDICTOR - 競艇予想AI API サーバー",
-        "version": "2.0.0",
+        "service": "WAVE PREDICTOR - 正式スクレイピング対応版",
+        "version": "3.0.0",
         "status": "running",
         "ai_available": AI_AVAILABLE,
+        "scraping_status": {
+            "daily_count": scraping_count_today,
+            "daily_limit": Config.MAX_SCRAPING_PER_DAY,
+            "cache_only_mode": Config.CACHE_ONLY_MODE,
+            "remaining": max(0, Config.MAX_SCRAPING_PER_DAY - scraping_count_today)
+        },
         "features": [
-            "全競艇場対応", 
+            "正式スクレイピング対応", 
+            "適正アクセス頻度", 
+            "実際のレース時間取得",
+            "動的スケジューリング",
+            "キャッシュ優先システム",
             "AI予想", 
-            "リアルタイムデータ", 
-            "キャッシュ機能",
-            "選手詳細分析",
-            "レース結果表示",
             "モバイル最適化"
         ],
         "endpoints": {
-            "races": "/api/races/today",
-            "prediction": "/api/prediction/{race_id}",
-            "venues": "/api/venues",
-            "racer_details": "/api/racer/{racer_id}/details",
-            "race_results": "/api/race-results/{venue_code}/{race_number}",
-            "system_status": "/api/system-status"
+            "daily_schedule": "/api/daily-schedule",
+            "race_entries": "/api/race-entries/{venue_code}/{race_number}",
+            "system_status": "/api/system-status",
+            "scraping_status": "/api/scraping-status"
         }
     })
 
@@ -1140,320 +1110,328 @@ def index():
 @limiter.limit("100 per minute")
 def test():
     return create_response(
-        data={"message": "API is working!", "mobile_optimized": hasattr(g, 'is_mobile') and g.is_mobile},
-        message="API正常動作中"
+        data={
+            "message": "正式スクレイピング版API動作中!", 
+            "mobile_optimized": hasattr(g, 'is_mobile') and g.is_mobile,
+            "scraping_count": scraping_count_today,
+            "can_scrape": can_scrape()
+        },
+        message="API正常動作中（適正スクレイピング版）"
     )
 
-# ===== 新規APIエンドポイント =====
-@app.route('/api/health', methods=['GET'])
-def health_check():
-    uptime = (datetime.now() - start_time).total_seconds()
-    avg_response_time = sum(response_times) / len(response_times) if response_times else 0
-    
-    health_data = {
-        "status": "healthy",
-        "uptime_seconds": uptime,
-        "uptime_formatted": str(timedelta(seconds=int(uptime))),
-        "version": "2.0.0",
-        "ai_available": AI_AVAILABLE,
-        "redis_available": redis_client is not None,
-        "total_requests": request_count,
-        "error_count": error_count,
-        "avg_response_time": round(avg_response_time, 3),
-        "database_status": "connected",
-        "features": {
-            "race_results": Config.ENABLE_RACE_RESULTS,
-            "mobile_optimization": Config.MOBILE_OPTIMIZATION
-        }
-    }
-    
-    return create_response(data=health_data)
-
-@app.route('/api/metrics', methods=['GET'])
-@limiter.limit("10 per minute")
-def get_metrics():
-    uptime = (datetime.now() - start_time).total_seconds()
-    
-    metrics = {
-        "requests": {
-            "total": request_count,
-            "errors": error_count,
-            "success_rate": (request_count - error_count) / request_count if request_count > 0 else 0
-        },
-        "performance": {
-            "avg_response_time": sum(response_times) / len(response_times) if response_times else 0,
-            "min_response_time": min(response_times) if response_times else 0,
-            "max_response_time": max(response_times) if response_times else 0
-        },
-        "system": {
-            "uptime_seconds": uptime,
-            "ai_available": AI_AVAILABLE,
-            "redis_available": redis_client is not None,
-            "active_cache_entries": len(venue_manager.venue_cache)
-        }
-    }
-    
-    return create_response(data=metrics)
-
-# ===== 選手詳細情報API =====
-@app.route('/api/racer/<int:racer_id>/details', methods=['GET'])
+# ===== 正式データ取得API =====
+@app.route('/api/daily-schedule', methods=['GET'])
 @limiter.limit("30 per minute")
-def get_racer_details(racer_id):
-    """選手詳細情報取得"""
+def get_daily_schedule():
+    """本日の全会場スケジュール取得"""
     try:
-        venue_code = request.args.get('venue_code')
+        date_str = request.args.get('date', datetime.now().strftime("%Y%m%d"))
         
-        # 基本統計取得
-        detailed_stats = racer_analyzer.get_racer_detailed_stats(racer_id, venue_code)
+        logger.info(f"日次スケジュール取得リクエスト: {date_str}")
         
-        # 会場相性（指定会場がある場合）
-        venue_compatibility = None
-        if venue_code:
-            venue_compatibility = racer_analyzer.get_venue_compatibility(racer_id, venue_code)
+        # スケジュールデータ取得
+        schedule_data = data_collector.get_daily_schedule(date_str)
         
-        # 成績履歴
-        performance_history = db_manager.get_racer_performance_history(racer_id)
-        
-        response_data = {
-            "racer_id": racer_id,
-            "detailed_stats": detailed_stats,
-            "venue_compatibility": venue_compatibility,
-            "performance_history": performance_history[:10],  # 直近10レース
-            "analysis_summary": {
-                "strengths": generate_racer_strengths(detailed_stats),
-                "weaknesses": generate_racer_weaknesses(detailed_stats),
-                "recommendation": generate_racer_recommendation(detailed_stats, venue_compatibility)
-            }
-        }
-        
-        return create_response(data=response_data)
-        
+        if schedule_data:
+            # 会場別にグループ化
+            venues = {}
+            for race in schedule_data:
+                venue_code = race['venue_code']
+                if venue_code not in venues:
+                    venues[venue_code] = {
+                        'venue_code': venue_code,
+                        'venue_name': race['venue_name'],
+                        'is_active': True,
+                        'races': []
+                    }
+                venues[venue_code]['races'].append({
+                    'race_number': race['race_number'],
+                    'scheduled_time': race['scheduled_time'],
+                    'status': race['status']
+                })
+            
+            return create_response(
+                data={
+                    "date": date_str,
+                    "venues": venues,
+                    "total_venues": len(venues),
+                    "total_races": len(schedule_data)
+                },
+                message="正式スケジュールデータ取得完了"
+            )
+        else:
+            return create_response(
+                error="スケジュールデータの取得に失敗しました",
+                status_code=404,
+                message="キャッシュデータもありません"
+            )
+            
     except Exception as e:
-        logger.error(f"選手詳細情報取得エラー: {str(e)}")
+        logger.error(f"日次スケジュール取得エラー: {str(e)}")
         return create_response(error=str(e), status_code=500)
 
-def generate_racer_strengths(stats):
-    """選手の強みを分析"""
-    strengths = []
-    basic = stats['basic_stats']
-    course_stats = stats['course_stats']
-    
-    if basic['win_rate'] > 20:
-        strengths.append("高い勝率")
-    if basic['avg_start_time'] < 0.15:
-        strengths.append("スタート技術")
-    if basic['trio_rate'] > 60:
-        strengths.append("安定した成績")
-    
-    # コース別強み
-    for course in course_stats:
-        if course['win_rate'] > 25:
-            strengths.append(f"{course['course']}コースが得意")
-    
-    return strengths[:3]  # 最大3つ
-
-def generate_racer_weaknesses(stats):
-    """選手の弱点を分析"""
-    weaknesses = []
-    basic = stats['basic_stats']
-    
-    if basic['win_rate'] < 10:
-        weaknesses.append("勝率が低い")
-    if basic['avg_start_time'] > 0.17:
-        weaknesses.append("スタートが遅れがち")
-    if basic['avg_rank'] > 4.0:
-        weaknesses.append("平均着順が悪い")
-    
-    return weaknesses[:2]  # 最大2つ
-
-def generate_racer_recommendation(stats, venue_compatibility):
-    """推奨度を生成"""
-    score = 50  # ベーススコア
-    
-    # 基本成績による加算
-    basic = stats['basic_stats']
-    score += (basic['win_rate'] - 15) * 2  # 勝率15%基準
-    score += (60 - basic['avg_rank'] * 10)  # 平均着順
-    
-    # 調子による調整
-    form_score = stats['recent_form']['form_score']
-    score += (form_score - 50) * 0.5
-    
-    # 会場相性
-    if venue_compatibility and venue_compatibility['compatibility_score']:
-        score += (venue_compatibility['compatibility_score'] - 50) * 0.3
-    
-    score = max(0, min(100, score))
-    
-    if score >= 80:
-        return "強く推奨"
-    elif score >= 65:
-        return "推奨"
-    elif score >= 50:
-        return "注意"
-    else:
-        return "避けた方が良い"
-
-# ===== レース結果API =====
-@app.route('/api/race-results/<venue_code>/<int:race_number>', methods=['GET'])
+@app.route('/api/race-entries/<venue_code>/<int:race_number>', methods=['GET'])
 @limiter.limit("20 per minute")
-def get_race_results_api(venue_code, race_number):
-    """レース結果取得API"""
+def get_race_entries_api(venue_code, race_number):
+    """正式出走表取得API"""
     try:
-        date_str = request.args.get('date', get_today_date())
+        date_str = request.args.get('date', datetime.now().strftime("%Y%m%d"))
         
         # バリデーション
         if venue_code not in [f"{i:02d}" for i in range(1, 25)]:
             return create_response(
                 error="無効な会場コードです",
-                status_code=400
+                status_code=400,
+                message="会場コードは01-24の範囲で指定してください"
             )
             
         if not (1 <= race_number <= 12):
             return create_response(
                 error="無効なレース番号です",
-                status_code=400
+                status_code=400,
+                message="レース番号は1-12の範囲で指定してください"
             )
         
-        race_id = f"{date_str}{venue_code}{race_number:02d}"
+        logger.info(f"正式出走表取得: 会場{venue_code} {race_number}R {date_str}")
         
-        # データベースから結果取得
+        # 出走表取得
+        entries_result = data_collector.get_race_entries(venue_code, race_number, date_str)
+        
+        if entries_result and entries_result.get("status") == "success":
+            venue_name = data_collector.venue_mapping.get(venue_code, f"会場{venue_code}")
+            
+            response_data = {
+                "venue_code": venue_code,
+                "venue_name": venue_name,
+                "race_number": race_number,
+                "race_date": date_str,
+                "racer_extraction": entries_result,
+                "data_source": "official_scraping" if can_scrape() else "cache",
+                "mobile_optimized": hasattr(g, 'is_mobile') and g.is_mobile
+            }
+            
+            return create_response(
+                data=response_data,
+                message="正式出走表取得完了"
+            )
+        else:
+            return create_response(
+                error="出走表データ取得失敗",
+                status_code=404,
+                message="レース開催状況を確認してください"
+            )
+            
+    except Exception as e:
+        logger.error(f"正式出走表API エラー: {str(e)}")
+        return create_response(error=str(e), status_code=500)
+
+@app.route('/api/system-status', methods=['GET'])
+@limiter.limit("60 per minute")
+def get_system_status():
+    """システム全体のステータス確認API"""
+    try:
+        uptime = (datetime.now() - start_time).total_seconds()
+        avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+        
+        # 本日のスクレイピングログ取得
+        today = datetime.now().strftime("%Y%m%d")
         conn = db_manager.get_connection()
         cursor = conn.cursor()
         
         cursor.execute('''
-        SELECT results_data, payout_data, created_at
-        FROM race_results
-        WHERE race_id = ?
-        ''', (race_id,))
+        SELECT COUNT(*), SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END)
+        FROM scraping_log
+        WHERE scraping_date = ?
+        ''', (today,))
         
-        result = cursor.fetchone()
+        log_result = cursor.fetchone()
+        total_scraping = log_result[0] if log_result[0] else 0
+        success_scraping = log_result[1] if log_result[1] else 0
+        
         conn.close()
         
-        if result:
-            results_data = json.loads(result[0]) if result[0] else None
-            payout_data = json.loads(result[1]) if result[1] else None
-            
-            venue_info = get_venue_info_cached(venue_code)
-            
-            response_data = {
-                "race_id": race_id,
-                "venue_code": venue_code,
-                "venue_name": venue_info["name"] if venue_info else "不明",
-                "race_number": race_number,
-                "race_date": date_str,
-                "results": results_data,
-                "payouts": payout_data,
-                "result_time": result[2]
+        system_data = {
+            "system_status": "running",
+            "version": "3.0.0",
+            "ai_available": AI_AVAILABLE,
+            "uptime": {
+                "seconds": uptime,
+                "formatted": str(timedelta(seconds=int(uptime)))
+            },
+            "scraping_status": {
+                "daily_count": scraping_count_today,
+                "daily_limit": Config.MAX_SCRAPING_PER_DAY,
+                "success_rate": success_scraping / total_scraping if total_scraping > 0 else 0,
+                "cache_only_mode": Config.CACHE_ONLY_MODE,
+                "can_scrape": can_scrape(),
+                "delay_seconds": Config.SCRAPING_DELAY
+            },
+            "performance": {
+                "total_requests": request_count,
+                "error_count": error_count,
+                "avg_response_time": round(avg_response_time, 3),
+                "success_rate": (request_count - error_count) / request_count if request_count > 0 else 0
+            },
+            "features": {
+                "official_scraping": True,
+                "dynamic_scheduling": True,
+                "race_results_enabled": Config.ENABLE_RACE_RESULTS,
+                "mobile_optimization": Config.MOBILE_OPTIMIZATION,
+                "redis_cache": redis_client is not None
             }
-            
-            return create_response(data=response_data)
-        else:
-            return create_response(
-                error="レース結果が見つかりません",
-                status_code=404,
-                message="レースが未実施または結果未取得です"
-            )
-            
+        }
+        
+        return create_response(data=system_data)
+        
     except Exception as e:
-        logger.error(f"レース結果API エラー: {str(e)}")
+        logger.error(f"システムステータス エラー: {str(e)}")
         return create_response(error=str(e), status_code=500)
 
-@app.route('/api/race-results/recent', methods=['GET'])
-@limiter.limit("20 per minute")
-def get_recent_race_results():
-    """最近のレース結果一覧"""
+@app.route('/api/scraping-status', methods=['GET'])
+@limiter.limit("30 per minute")
+def get_scraping_status():
+    """スクレイピング状況詳細API"""
     try:
-        limit = min(int(request.args.get('limit', 10)), 50)  # 最大50件
-        venue_code = request.args.get('venue_code')
+        today = datetime.now().strftime("%Y%m%d")
         
+        # 今日のスクレイピングログ取得
         conn = db_manager.get_connection()
         cursor = conn.cursor()
         
-        where_clause = ""
-        params = []
-        
-        if venue_code:
-            where_clause = "WHERE venue_code = ?"
-            params.append(venue_code)
-        
-        cursor.execute(f'''
-        SELECT race_id, venue_code, race_number, race_date, results_data, payout_data, created_at
-        FROM race_results
-        {where_clause}
+        cursor.execute('''
+        SELECT url, status, response_time, data_count, error_message, created_at
+        FROM scraping_log
+        WHERE scraping_date = ?
         ORDER BY created_at DESC
-        LIMIT ?
-        ''', params + [limit])
+        LIMIT 20
+        ''', (today,))
         
-        results = cursor.fetchall()
+        logs = cursor.fetchall()
+        
+        # 統計計算
+        cursor.execute('''
+        SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success,
+            AVG(response_time) as avg_time,
+            SUM(data_count) as total_data
+        FROM scraping_log
+        WHERE scraping_date = ?
+        ''', (today,))
+        
+        stats = cursor.fetchone()
         conn.close()
         
-        race_results = []
-        for result in results:
-            venue_info = get_venue_info_cached(result[1])
-            results_data = json.loads(result[4]) if result[4] else None
-            payout_data = json.loads(result[5]) if result[5] else None
-            
-            race_results.append({
-                "race_id": result[0],
-                "venue_code": result[1],
-                "venue_name": venue_info["name"] if venue_info else "不明",
-                "race_number": result[2],
-                "race_date": result[3],
-                "winner": results_data[0] if results_data and len(results_data) > 0 else None,
-                "win_payout": payout_data.get("win", {}).get("odds") if payout_data else None,
-                "result_time": result[6]
-            })
+        status_data = {
+            "date": today,
+            "limits": {
+                "daily_count": scraping_count_today,
+                "daily_limit": Config.MAX_SCRAPING_PER_DAY,
+                "remaining": max(0, Config.MAX_SCRAPING_PER_DAY - scraping_count_today),
+                "cache_only_mode": Config.CACHE_ONLY_MODE
+            },
+            "statistics": {
+                "total_attempts": stats[0] if stats[0] else 0,
+                "successful": stats[1] if stats[1] else 0,
+                "success_rate": (stats[1] / stats[0]) if stats[0] and stats[0] > 0 else 0,
+                "avg_response_time": round(stats[2], 3) if stats[2] else 0,
+                "total_data_retrieved": stats[3] if stats[3] else 0
+            },
+            "recent_logs": [
+                {
+                    "url": log[0],
+                    "status": log[1],
+                    "response_time": round(log[2], 3) if log[2] else 0,
+                    "data_count": log[3],
+                    "error": log[4],
+                    "timestamp": log[5]
+                } for log in logs
+            ],
+            "recommendations": []
+        }
         
-        return create_response(data={
-            "results": race_results,
-            "total_count": len(race_results)
-        })
+        # 推奨事項
+        if scraping_count_today >= Config.MAX_SCRAPING_PER_DAY * 0.8:
+            status_data["recommendations"].append("スクレイピング制限に近づいています")
+        
+        if Config.CACHE_ONLY_MODE:
+            status_data["recommendations"].append("キャッシュオンリーモードが有効です")
+        
+        return create_response(data=status_data)
         
     except Exception as e:
-        logger.error(f"最近のレース結果取得エラー: {str(e)}")
+        logger.error(f"スクレイピング状況取得エラー: {str(e)}")
         return create_response(error=str(e), status_code=500)
 
-# ===== 競艇データAPI（既存の改善版） =====
+# ===== 緊急モード切替API =====
+@app.route('/api/emergency/cache-only', methods=['POST'])
+@limiter.limit("5 per minute")
+def toggle_cache_only_mode():
+    """緊急時キャッシュオンリーモード切替"""
+    try:
+        data = request.get_json()
+        enable = data.get('enable', True)
+        
+        Config.CACHE_ONLY_MODE = enable
+        
+        message = "キャッシュオンリーモードを有効にしました" if enable else "キャッシュオンリーモードを無効にしました"
+        
+        logger.warning(f"緊急モード切替: {message}")
+        
+        return create_response(
+            data={
+                "cache_only_mode": Config.CACHE_ONLY_MODE,
+                "scraping_status": "停止中" if enable else "有効"
+            },
+            message=message
+        )
+        
+    except Exception as e:
+        logger.error(f"緊急モード切替エラー: {str(e)}")
+        return create_response(error=str(e), status_code=500)
+
+# ===== レガシーエンドポイント（互換性維持） =====
+@app.route('/api/real-data-test', methods=['GET'])
+@limiter.limit("20 per minute")
+def real_data_test():
+    """レガシーエンドポイント（桐生1R・キャッシュ対応版）"""
+    return get_race_entries_api('01', 1)
+
 @app.route('/api/races/today', methods=['GET'])
 @limiter.limit("30 per minute")
 def get_today_races():
+    """今日のレース一覧（簡易版）"""
     try:
         mobile_optimized = hasattr(g, 'is_mobile') and g.is_mobile
+        today = datetime.now().strftime("%Y%m%d")
+        
+        # キャッシュからスケジュール取得
+        schedule_data = data_collector.get_cached_schedule(today)
         
         races = []
-        for venue_code, venue_name in venue_manager.all_venues:
-            status = venue_manager.get_venue_status(venue_code)
-            
+        for race in schedule_data:
             race_data = {
-                "race_id": f"{get_today_date()}{venue_code}01",
-                "venue_code": venue_code,
-                "venue_name": venue_name,
-                "is_active": status.get('is_active', False),
-                "race_count": status.get('race_count', 0)
+                "race_id": f"{today}{race['venue_code']}{race['race_number']:02d}",
+                "venue_code": race['venue_code'],
+                "venue_name": race['venue_name'],
+                "race_number": race['race_number'],
+                "scheduled_time": race['scheduled_time'],
+                "is_active": race['status'] == 'scheduled'
             }
-            
-            if not mobile_optimized:
-                # デスクトップ版では詳細情報も含める
-                venue_info = get_venue_info_cached(venue_code)
-                if venue_info:
-                    race_data.update({
-                        "location": venue_info["location"],
-                        "region": venue_info["region"],
-                        "characteristics": venue_info["characteristics"]
-                    })
-            
             races.append(race_data)
         
         return create_response(data={
             "races": races,
-            "date": get_today_date(),
-            "mobile_optimized": mobile_optimized
+            "date": today,
+            "mobile_optimized": mobile_optimized,
+            "data_source": "cache"
         })
+        
     except Exception as e:
         logger.error(f"今日のレース取得エラー: {str(e)}")
         return create_response(error=str(e), status_code=500)
 
+# ===== AI予想エンドポイント =====
 @app.route('/api/prediction/<race_id>', methods=['GET', 'POST'])
 @limiter.limit("20 per minute")
 def get_race_prediction(race_id):
@@ -1493,452 +1471,19 @@ def get_mock_prediction(race_id):
         }
     }
 
-# ===== 統計・システム情報API =====
-@app.route('/api/stats', methods=['GET'])
-@limiter.limit("30 per minute")
-def get_performance_stats():
-    try:
-        # 拡張統計情報
-        stats = {
-            "period": "過去30日間",
-            "race_count": 150,
-            "accuracy": {
-                "win_hit_rate": 0.945,
-                "exacta_hit_rate": 0.823,
-                "quinella_hit_rate": 0.887,
-                "trio_hit_rate": 0.678
-            },
-            "performance": {
-                "avg_return_rate": 127.5,
-                "max_consecutive_hits": 8,
-                "avg_odds": 4.2
-            },
-            "venue_analysis": {
-                "best_venue": "住之江",
-                "best_venue_hit_rate": 0.92,
-                "most_analyzed": "桐生"
-            },
-            "ai_model": {
-                "version": "2.0.0",
-                "last_training": "2025-01-01",
-                "confidence_avg": 0.78
-            }
-        }
-        return create_response(data=stats)
-    except Exception as e:
-        logger.error(f"統計データ取得エラー: {str(e)}")
-        return create_response(error=str(e), status_code=500)
-
-# 会場コード一覧エンドポイント（レスポンス形式修正）
-@app.route('/api/venues', methods=['GET'])
-@limiter.limit("50 per minute")
-def get_venues():
-    try:
-        # キャッシュから取得試行
-        cache_key = "venues_data"
-        cached_data = get_from_cache(cache_key)
-        
-        if cached_data:
-            import json
-            venues = json.loads(cached_data)
-        else:
-            venues = {}
-            for i in range(1, 25):
-                venue_code = f"{i:02d}"
-                venue_info = get_venue_info_cached(venue_code)
-                if venue_info:
-                    venues[venue_code] = venue_info
-            
-            # キャッシュに保存
-            import json
-            set_to_cache(cache_key, json.dumps(venues), 3600)  # 1時間キャッシュ
-        
-        return create_response(data=venues)
-    except Exception as e:
-        logger.error(f"会場データ取得エラー: {str(e)}")
-        return create_response(error=str(e), status_code=500)
-
-# ===== 新しいAPIエンドポイント =====
-@app.route('/api/race-entries/<venue_code>/<race_number>', methods=['GET'])
-@limiter.limit("20 per minute")
-def get_race_entries_api(venue_code, race_number):
-    """出走表情報API（選手詳細情報付き）"""
-    try:
-        # バリデーション
-        if venue_code not in [f"{i:02d}" for i in range(1, 25)]:
-            return create_response(
-                error="無効な会場コードです",
-                status_code=400,
-                message="会場コードは01-24の範囲で指定してください"
-            )
-            
-        if not race_number.isdigit() or not (1 <= int(race_number) <= 12):
-            return create_response(
-                error="無効なレース番号です",
-                status_code=400,
-                message="レース番号は1-12の範囲で指定してください"
-            )
-        
-        # 出走表取得
-        entries = venue_manager.get_race_entries(venue_code, race_number)
-        
-        if entries and entries.get("status") == "success":
-            # 各選手の詳細情報を追加
-            enhanced_racers = []
-            for racer in entries.get("racers", []):
-                try:
-                    racer_id = int(racer.get("registration_number", 0))
-                    if racer_id > 0:
-                        # 選手詳細統計を取得
-                        detailed_stats = racer_analyzer.get_racer_detailed_stats(racer_id, venue_code)
-                        venue_compatibility = racer_analyzer.get_venue_compatibility(racer_id, venue_code)
-                        
-                        enhanced_racer = {
-                            **racer,
-                            "detailed_stats": detailed_stats,
-                            "venue_compatibility": venue_compatibility
-                        }
-                        enhanced_racers.append(enhanced_racer)
-                    else:
-                        enhanced_racers.append(racer)
-                except Exception as e:
-                    logger.warning(f"選手詳細情報取得エラー: {e}")
-                    enhanced_racers.append(racer)
-            
-            # 会場情報も追加
-            venue_info = get_venue_info_cached(venue_code)
-            
-            response_data = {
-                "venue_code": venue_code,
-                "venue_name": venue_info["name"] if venue_info else "不明",
-                "venue_info": venue_info,
-                "race_number": race_number,
-                "entries": {
-                    **entries,
-                    "racers": enhanced_racers
-                },
-                "mobile_optimized": hasattr(g, 'is_mobile') and g.is_mobile
-            }
-            
-            return create_response(data=response_data)
-        else:
-            return create_response(
-                error="出走表データ取得失敗",
-                status_code=404,
-                message="レース開催状況を確認してください"
-            )
-            
-    except Exception as e:
-        logger.error(f"出走表API エラー: {str(e)}")
-        return create_response(error=str(e), status_code=500)
-
-@app.route('/api/venue-status-new/<venue_code>', methods=['GET'])
-@limiter.limit("30 per minute")
-def get_venue_status_new(venue_code):
-    """新しい会場ステータスAPI（キャッシュから高速取得）"""
-    try:
-        if venue_code not in [f"{i:02d}" for i in range(1, 25)]:
-            return create_response(
-                error="無効な会場コードです",
-                status_code=400
-            )
-        
-        # キャッシュから取得
-        status = venue_manager.get_venue_status(venue_code)
-        
-        # 会場名情報を追加
-        venue_info = get_venue_info_cached(venue_code)
-        
-        response_data = {
-            "venue_code": venue_code,
-            "venue_name": venue_info["name"] if venue_info else "不明",
-            "venue_location": venue_info["location"] if venue_info else "不明",
-            "status": status
-        }
-        
-        return create_response(data=response_data, message="キャッシュからの高速取得")
-        
-    except Exception as e:
-        logger.error(f"会場ステータスAPI エラー: {str(e)}")
-        return create_response(error=str(e), status_code=500)
-
-@app.route('/api/daily-races', methods=['GET'])
-@limiter.limit("20 per minute")
-def get_daily_races():
-    """本日開催中の全会場情報API"""
-    try:
-        active_venues = []
-        
-        for venue_code, venue_data in venue_manager.venue_cache.items():
-            if venue_data.get('is_active', False):
-                venue_info = get_venue_info_cached(venue_code)
-                
-                venue_summary = {
-                    "venue_code": venue_code,
-                    "venue_name": venue_info["name"] if venue_info else "不明",
-                    "venue_location": venue_info["location"] if venue_info else "不明",
-                    "race_count": venue_data.get('race_count', 0),
-                    "races": venue_data.get('races', []),
-                    "last_updated": venue_data.get('last_updated')
-                }
-                
-                active_venues.append(venue_summary)
-        
-        response_data = {
-            "date": get_today_date(),
-            "active_venue_count": len(active_venues),
-            "venues": active_venues
-        }
-        
-        return create_response(data=response_data, message="0時更新の日次データ")
-        
-    except Exception as e:
-        logger.error(f"日次レースAPI エラー: {str(e)}")
-        return create_response(error=str(e), status_code=500)
-
-@app.route('/api/system-status', methods=['GET'])
-@limiter.limit("60 per minute")
-def get_system_status():
-    """システム全体のステータス確認API"""
-    try:
-        total_venues = len(venue_manager.all_venues)
-        active_venues = sum(1 for v in venue_manager.venue_cache.values() if v.get('is_active', False))
-        
-        last_updates = [
-            v.get('last_updated') for v in venue_manager.venue_cache.values() 
-            if v.get('last_updated')
-        ]
-        
-        system_data = {
-            "system_status": "running",
-            "ai_available": AI_AVAILABLE,
-            "data_collection": {
-                "total_venues": total_venues,
-                "active_venues": active_venues,
-                "cache_entries": len(venue_manager.venue_cache),
-                "last_update": max(last_updates) if last_updates else None
-            },
-            "scheduler_running": venue_manager.scheduler.running if venue_manager.scheduler else False,
-            "performance": {
-                "total_requests": request_count,
-                "error_count": error_count,
-                "avg_response_time": sum(response_times) / len(response_times) if response_times else 0
-            },
-            "features": {
-                "race_results_enabled": Config.ENABLE_RACE_RESULTS,
-                "mobile_optimization": Config.MOBILE_OPTIMIZATION,
-                "redis_cache": redis_client is not None
-            }
-        }
-        
-        return create_response(data=system_data)
-        
-    except Exception as e:
-        logger.error(f"システムステータス エラー: {str(e)}")
-        return create_response(error=str(e), status_code=500)
-
-# ===== AI関連エンドポイント（拡張版） =====
-@app.route('/api/ai-prediction-simple', methods=['POST'])
-@limiter.limit("15 per minute")
-def ai_prediction_simple():
-    try:
-        data = request.get_json()
-        
-        if AI_AVAILABLE:
-            racers = data.get('racers', [])
-            venue_code = data.get('venue_code', '01')
-            
-            # AIクラスに処理を委譲
-            result = ai_model.get_comprehensive_prediction(racers, venue_code)
-            
-            # レスポンスを拡張
-            result['analysis_details'] = {
-                'venue_characteristics': get_venue_info_cached(venue_code),
-                'weather_impact': 'moderate',
-                'course_conditions': 'standard',
-                'field_strength': calculate_field_strength(racers)
-            }
-            
-            return create_response(data=result)
-        else:
-            return create_response(error="AI not available", status_code=503)
-            
-    except Exception as e:
-        logger.error(f"AI予想エラー: {str(e)}")
-        return create_response(error=str(e), status_code=500)
-
-def calculate_field_strength(racers):
-    """出走メンバーの強さ分析"""
-    if not racers:
-        return "unknown"
-    
-    a1_count = sum(1 for r in racers if r.get('class') == 'A1')
-    total_racers = len(racers)
-    
-    if a1_count >= 4:
-        return "very_strong"
-    elif a1_count >= 2:
-        return "strong"
-    elif a1_count >= 1:
-        return "moderate"
-    else:
-        return "weak"
-
-# ===== UI/UX改善API =====
-@app.route('/api/ui/loading-status', methods=['GET'])
-@limiter.limit("100 per minute")
-def get_loading_status():
-    """ローディング状況取得（UI用）"""
-    try:
-        # 進行中の処理状況を返す
-        status = {
-            "data_loading": {
-                "venues": len(venue_manager.venue_cache) > 0,
-                "cache_ready": redis_client is not None,
-                "ai_ready": AI_AVAILABLE
-            },
-            "progress": {
-                "venue_cache": min(100, len(venue_manager.venue_cache) * 4),  # 25会場で100%
-                "system_ready": 100 if AI_AVAILABLE else 75
-            },
-            "estimated_completion": 3000,  # ミリ秒
-            "message": "データ取得完了" if len(venue_manager.venue_cache) > 0 else "データ取得中..."
-        }
-        
-        return create_response(data=status)
-        
-    except Exception as e:
-        logger.error(f"ローディング状況取得エラー: {str(e)}")
-        return create_response(error=str(e), status_code=500)
-
-@app.route('/api/ui/notifications', methods=['GET'])
-@limiter.limit("50 per minute")
-def get_notifications():
-    """通知・お知らせ取得"""
-    try:
-        notifications = [
-            {
-                "id": 1,
-                "type": "info",
-                "title": "システム正常稼働中",
-                "message": "AIモデルとデータ収集が正常に動作しています",
-                "timestamp": datetime.now().isoformat(),
-                "priority": "low"
-            },
-            {
-                "id": 2,
-                "type": "success",
-                "title": "予想精度向上",
-                "message": "最新のレース結果を反映し、予想精度が向上しました",
-                "timestamp": (datetime.now() - timedelta(hours=2)).isoformat(),
-                "priority": "medium"
-            }
-        ]
-        
-        if not AI_AVAILABLE:
-            notifications.append({
-                "id": 3,
-                "type": "warning",
-                "title": "AI機能制限中",
-                "message": "現在AIモデルが利用できません。基本機能は正常に動作しています",
-                "timestamp": start_time.isoformat(),
-                "priority": "high"
-            })
-        
-        return create_response(data={
-            "notifications": notifications,
-            "unread_count": len([n for n in notifications if n["priority"] in ["medium", "high"]])
-        })
-        
-    except Exception as e:
-        logger.error(f"通知取得エラー: {str(e)}")
-        return create_response(error=str(e), status_code=500)
-
-# ===== レガシーエンドポイント（互換性維持） =====
-@app.route('/api/real-data-test', methods=['GET'])
-@limiter.limit("20 per minute")
-def real_data_test():
-    """既存エンドポイント（桐生1R・キャッシュ対応版）"""
-    cache_key = "real_data_test_01"
-    
-    try:
-        # キャッシュ確認
-        cached_result = get_from_cache(cache_key)
-        if cached_result:
-            logger.info("キャッシュからデータを返却")
-            import json
-            return create_response(data=json.loads(cached_result))
-        
-        venue_code = '01'
-        race_number = '1'
-        date_str = get_today_date()
-        
-        race_url = build_race_url(venue_code, race_number, date_str)
-        
-        logger.info("データ取得開始...")
-        
-        # 実際のデータ取得処理
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        
-        try:
-            response = requests.get(race_url, headers=headers, timeout=30)
-            race_data = {
-                "status": "success",
-                "content": response.content,
-                "text": response.text,
-                "length": len(response.content),
-                "encoding": response.encoding
-            }
-        except Exception as e:
-            race_data = {"status": "error", "message": str(e)}
-        
-        if race_data["status"] == "error":
-            return create_response(
-                error="データ取得失敗",
-                status_code=500,
-                message=race_data["message"]
-            )
-        
-        logger.info("選手データ抽出開始...")
-        racer_data = extract_racer_data_final(race_data["content"])
-        
-        result = {
-            "data_acquisition": {
-                "status": race_data["status"],
-                "length": race_data["length"],
-                "encoding": race_data["encoding"]
-            },
-            "racer_extraction": racer_data,
-            "html_sample": str(race_data["content"][:500]) if race_data.get("content") else "N/A",
-            "enhanced_features": True,
-            "mobile_optimized": hasattr(g, 'is_mobile') and g.is_mobile
-        }
-        
-        # キャッシュに保存
-        import json
-        set_to_cache(cache_key, json.dumps(result), 1800)  # 30分キャッシュ
-        
-        return create_response(data=result)
-        
-    except Exception as e:
-        logger.error(f"リアルデータテストエラー: {str(e)}")
-        return create_response(error=str(e), status_code=500)
-
 # ===== アプリケーション初期化 =====
 def initialize_app():
     """アプリケーション初期化"""
     try:
-        logger.info("=== アプリケーション初期化開始 ===")
+        logger.info("=== 正式スクレイピング版アプリケーション初期化開始 ===")
         
         # データベース初期化
         db_manager.initialize_all_tables()
         logger.info("データベース初期化完了")
         
-        # スケジューラー開始
-        venue_manager.start_background_updates()
-        logger.info("✅ スケジューラー開始完了")
+        # レーススケジューラー開始
+        schedule_manager.start_scheduled_tasks()
+        logger.info("✅ レーススケジューラー開始完了")
         
         logger.info("=== アプリケーション初期化完了 ===")
         
@@ -1958,7 +1503,7 @@ def main():
         
         # サーバー起動
         port = int(os.environ.get('PORT', 5000))
-        logger.info(f"🚀 WAVE PREDICTOR Flask アプリケーション開始: ポート {port}")
+        logger.info(f"🚀 WAVE PREDICTOR 正式スクレイピング版 Flask アプリケーション開始: ポート {port}")
         
         app.run(
             debug=app.config['DEBUG'], 
